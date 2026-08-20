@@ -1,0 +1,44 @@
+# goreleaser v2 — builds and publishes the rayls CLI binaries on tag push.
+# Locally: `goreleaser release --snapshot --clean` to test the build matrix.
+version: 2
+
+project_name: rayls
+
+builds:
+  - main: .
+    binary: rayls
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{ .Tag }}
+      - -X main.CommitSHA={{ .ShortCommit }}
+      - -X main.BuildDate={{ .Date }}
+
+# Publish raw binaries (no tar.gz): install is a single curl, matching the
+# README's `rayls-linux-amd64`-style asset names.
+archives:
+  - formats: [binary]
+    name_template: "rayls-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: SHA256SUMS
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  draft: false
+  prerelease: auto

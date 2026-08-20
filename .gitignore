@@ -1,0 +1,57 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Scripts
+scripts/tag-local-images.sh
+scripts/push-images.sh
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+#AI
+CLAUDE.md
+GEMINI.md
+.DS_Store
+.vscode/*
+.vscode/**/*
+# Binaries
+rayls
+rayls-linux-*
+rayls-darwin-*
+disk/*
+dist/**/*
+manifest.json
+# Docker
+docker-compose.yml
+docker-compose*
+docker/*
+docker/*/*
+
+# ENV Files
+/.A.env
+/.B.env
+/.C.env
+/.D.env
+/.E.env
+/.F.env
+/.*.env
+
+.env
+.env1
+.env2
+.a.env
+.b.env
+/.A.env
+/.B.env
+/.C.env
+/.D.env
+/.E.env
+/.F.env
