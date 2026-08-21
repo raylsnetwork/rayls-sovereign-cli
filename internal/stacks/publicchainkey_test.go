@@ -140,98 +140,57 @@ func TestResolvePublicChainKey(t *testing.T) {
 
 func TestCheckPublicChainKey(t *testing.T) {
 	key := strings.Repeat("ab", 32)
+	keyLine := "  - " + docker.PublicChainKeyComposeEnv + "\n"
 
-	t.Run("no compose file passes", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		clearKeyEnv(t)
-		if err := CheckPublicChainKey(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-	})
+	tests := []struct {
+		name    string
+		compose string            // compose file content; "" = no docker-compose.yaml
+		envFile string            // stack .env content; "" = no .env
+		env     map[string]string // process env to set (empty value = set-but-empty)
+		wantErr string            // substring the error must contain; "" = expect success
+	}{
+		{name: "no compose file passes"},
+		{name: "local stack compose passes without key",
+			compose: "services: {}\n# no public chain key line\n"},
+		{name: "testnet compose without any key fails with funding pointer",
+			compose: "environment:\n" + keyLine, wantErr: docker.FundingURL},
+		{name: "key in env passes",
+			compose: keyLine, env: map[string]string{publicChainKeyVar: key}},
+		{name: "key in stack .env passes",
+			compose: keyLine, envFile: publicChainKeyVar + "=" + key + "\n"},
+		{name: "DEMO alias in stack .env passes (compose reads it too)",
+			compose: keyLine, envFile: demoPublicChainKeyVar + "=" + key + "\n"},
+		{name: "set-but-empty env var fails even with .env key",
+			compose: keyLine, envFile: publicChainKeyVar + "=" + key + "\n",
+			env: map[string]string{publicChainKeyVar: ""}, wantErr: "EMPTY"},
+		{name: "malformed key in .env fails with format error",
+			compose: keyLine, envFile: publicChainKeyVar + "=nothex\n", wantErr: "invalid"},
+		{name: "pre-OSS compose with embedded default is left alone",
+			compose: "  - " + legacyKeyEnvPrefix + "somelegacydefault}}\n"},
+	}
 
-	t.Run("local stack compose passes without key", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "services: {}\n# no public chain key line\n")
-		clearKeyEnv(t)
-		if err := CheckPublicChainKey(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-	})
-
-	t.Run("testnet compose without any key fails with funding pointer", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "environment:\n  - "+docker.PublicChainKeyComposeEnv+"\n")
-		clearKeyEnv(t)
-		err := CheckPublicChainKey()
-		if err == nil {
-			t.Fatal("expected an error")
-		}
-		if !strings.Contains(err.Error(), docker.FundingURL) {
-			t.Errorf("error should point at the funding page, got: %v", err)
-		}
-	})
-
-	t.Run("key in env passes", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "  - "+docker.PublicChainKeyComposeEnv+"\n")
-		clearKeyEnv(t)
-		t.Setenv(publicChainKeyVar, key)
-		if err := CheckPublicChainKey(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-	})
-
-	t.Run("key in stack .env passes", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "  - "+docker.PublicChainKeyComposeEnv+"\n")
-		writeEnvFile(t, publicChainKeyVar+"="+key+"\n")
-		clearKeyEnv(t)
-		if err := CheckPublicChainKey(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-	})
-
-	t.Run("DEMO alias in stack .env passes (compose reads it too)", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "  - "+docker.PublicChainKeyComposeEnv+"\n")
-		writeEnvFile(t, demoPublicChainKeyVar+"="+key+"\n")
-		clearKeyEnv(t)
-		if err := CheckPublicChainKey(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-	})
-
-	t.Run("set-but-empty env var fails even with .env key", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "  - "+docker.PublicChainKeyComposeEnv+"\n")
-		writeEnvFile(t, publicChainKeyVar+"="+key+"\n")
-		clearKeyEnv(t)
-		t.Setenv(publicChainKeyVar, "")
-		err := CheckPublicChainKey()
-		if err == nil || !strings.Contains(err.Error(), "EMPTY") {
-			t.Errorf("expected set-but-empty error, got %v", err)
-		}
-	})
-
-	t.Run("malformed key in .env fails with format error", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "  - "+docker.PublicChainKeyComposeEnv+"\n")
-		writeEnvFile(t, publicChainKeyVar+"=nothex\n")
-		clearKeyEnv(t)
-		err := CheckPublicChainKey()
-		if err == nil || !strings.Contains(err.Error(), "invalid") {
-			t.Errorf("expected format error, got %v", err)
-		}
-	})
-
-	t.Run("pre-OSS compose with embedded default is left alone", func(t *testing.T) {
-		t.Chdir(t.TempDir())
-		writeCompose(t, "  - "+legacyKeyEnvPrefix+"somelegacydefault}}\n")
-		clearKeyEnv(t)
-		if err := CheckPublicChainKey(); err != nil {
-			t.Errorf("expected nil for legacy compose, got %v", err)
-		}
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			clearKeyEnv(t)
+			if tc.compose != "" {
+				writeCompose(t, tc.compose)
+			}
+			if tc.envFile != "" {
+				writeEnvFile(t, tc.envFile)
+			}
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			err := CheckPublicChainKey()
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("expected nil, got %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Errorf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
 }
 
 func TestPublicChainKeyGuardApplies(t *testing.T) {

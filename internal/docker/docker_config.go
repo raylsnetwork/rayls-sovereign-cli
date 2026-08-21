@@ -471,6 +471,11 @@ func getKosServices(participants []string, monitoring bool, local bool, lean boo
 	return services
 }
 
+// relayerServicePrefix names the per-participant private-relayer services
+// ("relayer-a", ...) — shared by the service map, the build attach, and the
+// hub-less drop list.
+const relayerServicePrefix = "relayer-"
+
 func getRelayerServices(participants []string, monitoring bool, local bool, srcs *Sources) map[string]*Service {
 	services := make(map[string]*Service)
 	otelSdkDisabled := "true"
@@ -484,7 +489,7 @@ func getRelayerServices(participants []string, monitoring bool, local bool, srcs
 		portsDebug := 4010 + i
 
 		participantUpper := strings.ToUpper(p)
-		serviceName := "relayer-" + p
+		serviceName := relayerServicePrefix + p
 		envFile := fmt.Sprintf("%s/.%s.env", relayerPathV3, participantUpper)
 
 		env := []string{
@@ -541,7 +546,7 @@ func getRelayerServices(participants []string, monitoring bool, local bool, srcs
 	// From-source build (--local): attach to the first participant's service
 	// only; siblings reuse the tag the build produces (same pattern as kos).
 	if len(participants) > 0 {
-		attachBuild(services["relayer-"+participants[0]], srcs, "relayer", "relayer")
+		attachBuild(services[relayerServicePrefix+participants[0]], srcs, "relayer", "relayer")
 	}
 	return services
 }
@@ -1400,7 +1405,7 @@ func applyNoHub(compose *DockerCompose, participants []string) {
 		"audit-explorer",
 	}
 	for _, p := range participants {
-		drop = append(drop, "relayer-"+p)
+		drop = append(drop, relayerServicePrefix+p)
 	}
 	for _, name := range drop {
 		delete(compose.Services, name)
