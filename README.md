@@ -33,7 +33,7 @@ For a deeper understanding of the Rayls architecture and ecosystem, please visit
 *   **Sequential Image Pulling:** Automatically pulls container images one-by-one — in every mode, `--local` included — to stay under ECR Public's per-IP pull rate limit, cooling off and retrying if a registry throttles anyway.
 *   **Lifecycle Management:** Specialized commands to start, stop, and tear down the stack.
 *   **Monitoring & Observability:** Optional OpenTelemetry stack with eBPF auto-instrumentation, Grafana, Loki, Prometheus, and Tempo.
-*   **Per-Node Block Explorers:** Optional Blockscout deployment per privacy node.
+*   **Per-Node Block Explorers:** Blockscout deployment per privacy node (default-on).
 *   **Version Management:** Built-in version checking and update notifications.
 *   **Environment Verification:** Tools to verify the integrity of the setup, including an end-to-end public-chain bridge smoke test.
 
@@ -65,28 +65,28 @@ Download the latest binary for your platform:
 
 **macOS (Apple Silicon):**
 ```bash
-curl -L https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-darwin-arm64 -o rayls
+curl -fL https://cli.rayls.com/rayls-darwin-arm64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
 
 **macOS (Intel):**
 ```bash
-curl -L https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-darwin-amd64 -o rayls
+curl -fL https://cli.rayls.com/rayls-darwin-amd64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
 
 **Linux (x86_64):**
 ```bash
-curl -L https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-linux-amd64 -o rayls
+curl -fL https://cli.rayls.com/rayls-linux-amd64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
 
 **Linux (ARM64):**
 ```bash
-curl -L https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-linux-arm64 -o rayls
+curl -fL https://cli.rayls.com/rayls-linux-arm64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
@@ -121,26 +121,27 @@ To set up a new environment, run the `init` command. This will:
 ./rayls init
 ```
 
-By default this spins up **Axyl privacy node(s) bridged to a public chain**, with **hub-less as the default topology**: the nodes intercommunicate via the public chain only. With `--local` everything runs on your machine (source builds + an in-stack Axyl public chain). Pulled-image inits (no `--local`) bridge to the Rayls testnet and keep a minimal Private Network Hub for now (the published images predate hub-less support), deploying from **your own funded testnet key**: `rayls init` prompts for it and saves it to the stack `.env` (see [Funding](#funding)). `--with-hub` opts a lean stack into the minimal hub explicitly; `--full` brings the complete hub demo stack.
+By default this spins up **Axyl privacy node(s) bridged to a public chain**, with **hub-less as the default topology**: the nodes intercommunicate via the public chain only, no Private Network Hub. With `--local` everything runs on your machine (source builds + an in-stack Axyl public chain). Pulled-image inits (no `--local`) bridge to the Rayls testnet, deploying from **your own funded testnet key**: `rayls init` prompts for it and saves it to the stack `.env` (see [Funding](#funding)). Every participant also gets a Blockscout explorer by default (`--no-blockscout` disables). `--with-hub` opts a lean stack into the minimal hub explicitly; `--full` brings the complete hub demo stack.
 
 If a `docker-compose.yaml` already exists, you'll be prompted to overwrite or use the existing file. If you choose to keep the existing file, the CLI will proceed with pulling images and starting containers.
 
 **Options:**
 *   `--full`: Bring up the full multi-participant demo stack (local Private Network Hub / commit chain, governance, proofs API, multiple privacy nodes). Combine with `--members` and/or `--public-chain`.
-*   `--with-hub`: Include the **Private Network Hub** in the default (lean) stack — a **functional hub**: PNH plus the private relayer and proofs-api, so PN↔PNH messaging and Enygma work. Without it, **hub-less is the default**: no PNH, no private relayer, no proofs API — the privacy nodes intercommunicate via the public chain only. Hub-less currently applies to `--local` stacks only: it needs `rayls-privacy-contracts` / `rayls-privacy-relayer-api` `version/3.0.1`, which the published ECR images predate, so pulled-image inits keep the hub until the images catch up. Every `--local` init records its build sources in the stack `.env` — the local sibling checkouts (`../rayls-privacy-contracts`, `../rayls-privacy-relayer-api`, recorded as relative paths) via `CONTRACTS_SRC`/`RELAYER_SRC` when present (whatever branch is checked out there is what builds), else the `version/3.0.1` git contexts via `CONTRACTS_REF`/`RELAYER_REF`. `--full` always includes the full hub.
+*   `--with-hub`: Include the **Private Network Hub** in the default (lean) stack — a **functional hub**: PNH plus the private relayer and proofs-api, so PN↔PNH messaging and Enygma work. Without it, **hub-less is the default** (both pulled-image and `--local` stacks): no PNH, no private relayer, no proofs API — the privacy nodes intercommunicate via the public chain only, and the contracts deploy runs with `HUB_ENABLED=false`. Every `--local` init records its build sources in the stack `.env` — the local sibling checkouts (`../rayls-sovereign-contracts`, `../rayls-sovereign-relayer`, recorded as relative paths) via `CONTRACTS_SRC`/`RELAYER_SRC` when present (whatever branch is checked out there is what builds), else the `main` git contexts via `CONTRACTS_REF`/`RELAYER_REF`. `--full` always includes the full hub.
 *   `--members <int>`: Number of privacy node participants. With `--full`: 2–6 (default **2**). For the hub-less default topology: 1–6 (default **1**) — the nodes intercommunicate via the public chain, so any count is meaningful. Ignored on hub-carrying lean stacks (`--with-hub` runs a single participant; use `--full` for the multi-participant hub).
 *   `--public-chain <preset>`: Public chain preset to bridge to — `local` (an Axyl public chain running **inside the stack**: service `public-chain`, RPC `localhost:8845`, chain id `7331`, deployer genesis-funded, no external connectivity) or `rayls-testnet` (the external testnet). Applied by default for the default (lean) stack — in the hub-less default the public chain is the privacy nodes' only interconnection path: **`local` with `--local`, `rayls-testnet` otherwise**. `--full --local` also defaults to `local` (the 3.0.1 source deploy requires a public chain); only `--full` with pulled images runs without one. Adds per-participant `pubrelayer` services.
 *   `--privacy-node-only`: Run just a single Axyl privacy node, with no bridge or surrounding services. Ignores all other flags.
 *   `--monitoring`: Enable the observability stack (Grafana, Loki, Prometheus, Tempo) with eBPF auto-instrumentation. Default: off.
-*   `--blockscout <list>`: Comma-separated participant letters that should get a Blockscout explorer (e.g. `a,b`). Opt-in by default; default-on (`a,b`) with `--full`. Pass an empty value to disable.
-*   `--local`: Dev mode. Build kos/CTS, pubrelayer and contracts from source (short names, `pull_policy=build`/`never`) instead of pulling them from ECR. Also defaults the topology to **hub-less** and `--public-chain` to `local`, so a `--local` init runs **everything on your machine with no hub** — pair with `--public-chain rayls-testnet` to keep bridging to the testnet instead. The infra images (NATS, the Private Network Hub, the private relayer, proofs-api, Postgres, nginx, Blockscout) still come from their registries and are pre-pulled one at a time, same as the published stack.
+*   `--blockscout <list>`: Comma-separated participant letters that should get a Blockscout explorer (e.g. `a,b`). Defaults to **every participant**; use this to narrow the set.
+*   `--no-blockscout`: Disable the per-node Blockscout explorers entirely (overrides `--blockscout`).
+*   `--local`: Dev mode. Build the Rayls app components (kos/CTS, pubrelayer, private relayer, contracts — plus governance, proofs-api and audit-explorer in hub topologies) from source (short names, `pull_policy=build`/`never`) instead of pulling them from ECR. Also defaults the topology to **hub-less** and `--public-chain` to `local`, so a `--local` init runs **everything on your machine with no hub** — pair with `--public-chain rayls-testnet` to keep bridging to the testnet instead. The infra images (NATS, the Private Network Hub, Postgres, nginx, Blockscout) still come from their registries and are pre-pulled one at a time, same as the published stack.
 *   `--no-pull`: Skip the image-pull step; `up` then fetches only the images missing locally, one at a time. Use to keep a locally-built image (e.g. a custom node/contracts build) instead of overwriting it from ECR.
 *   `--lean`: **Deprecated** — the lean privacy-node → public-chain bridge is now the default, so this flag is a no-op. Use `--full` for the multi-participant stack.
 
 Example:
 ```bash
-./rayls init --blockscout a                   # default: 1 Axyl node -> rayls-testnet + explorer (http://localhost:10004)
-./rayls init --local --blockscout a           # fully local: source builds + local Axyl public chain
+./rayls init                                  # default: 1 Axyl node -> rayls-testnet + explorer (http://localhost:10004)
+./rayls init --local                          # fully local: source builds + local Axyl public chain
 ./rayls init --local --public-chain rayls-testnet  # source builds, but bridge to the testnet
 ./rayls init --local --members 3              # 3 hub-less privacy nodes, fully local
 ./rayls init --local --with-hub               # keep the minimal PNH (lean hub stack)
@@ -158,11 +159,11 @@ The `init` flags compose into several distinct stack flavors:
 A **minimal privacy-node → public-chain bridge** for a single participant (`a`): the Axyl privacy node plus the services needed to bridge to an external public chain, with **no** private relayer, gnark/proofs API, or governance. This is what a bare `rayls init` does.
 
 ```bash
-./rayls init --blockscout a                # bridge to rayls-testnet (default) + privacy-chain explorer
+./rayls init                               # bridge to rayls-testnet (default) + privacy-chain explorer
 ./rayls init --public-chain rayls-testnet  # same; --public-chain overrides the target
 ```
 
-Hub-less (`--local`, the default topology) the stack is 7 services: `postgres` (shared Postgres — backs the pubrelayer + KOS databases), `nats`, `privacy-node-a`, `public-chain` (the in-stack Axyl public chain), `contracts`, `kos-a`, `pubrelayer-a`. KOS is kept because the pubrelayer fetches its signing keys from it. With `--with-hub` (and on pulled-image inits, until the published images support hub-less) the stack additionally runs `private-network-hub` (the Besu commit chain), `relayer-a` (the private relayer, PN↔PNH message relaying) and `proofs-api` (Enygma proofs).
+Hub-less (the default topology) the stack is 7 core services: `postgres` (shared Postgres — backs the pubrelayer + KOS databases), `nats`, `privacy-node-a`, `public-chain` (the in-stack Axyl public chain with `--local`; omitted when bridging to the testnet), `contracts`, `kos-a`, `pubrelayer-a` — plus the per-node Blockscout explorer services (default-on; `--no-blockscout` drops them). KOS is kept because the pubrelayer fetches its signing keys from it. With `--with-hub` the stack additionally runs `private-network-hub` (the Besu commit chain), `relayer-a` (the private relayer, PN↔PNH message relaying) and `proofs-api` (Enygma proofs).
 
 Bridging to the testnet deploys from **your own funded key**: `rayls init` prompts for it and saves it to the stack `.env` (see [Funding](#funding)). Non-interactive/CI runs pass it via the environment instead:
 
@@ -170,7 +171,7 @@ Bridging to the testnet deploys from **your own funded key**: `rayls init` promp
 PUBLIC_CHAIN_PRIVATE_KEY=<hex> ./rayls init --public-chain rayls-testnet   # 0x prefix optional
 ```
 
-Once all 9 services are healthy, bridge a token end-to-end (see [Verifying the bridge](#verifying-the-bridge)).
+Once the stack is healthy, bridge a token end-to-end (see [Verifying the bridge](#verifying-the-bridge)).
 
 > This mode uses the dedicated `rayls-contracts:lean-no-pnh` contracts image (built from the sibling `rayls-privacy-contracts` repo, branch `cli-lean-no-pnh`) and the `rayls-privacy-axyl` node image. Both are published to ECR, so the default `init` works out of the box.
 
@@ -193,7 +194,7 @@ PRIVATE_KEY_SYSTEM=<0x-hex> ./rayls init --full
 
 #### 3. Hub-less (the default topology)
 
-The default topology runs the environment **without the Private Network Hub**, mirroring `start_dev.sh --no-hub` in the `rayls-privacy-relayer-api` repo: no `private-network-hub` (Besu), no private relayers, no proofs API, no governance and no audit explorer (those belong to the hub topologies — use `--with-hub` or `--full` for them). The privacy nodes intercommunicate through the **public chain only**, so a public chain is always configured — with `--local` it defaults to the `local` preset (an Axyl public chain inside the stack), making the whole system **fully self-contained on one host**; pass `--public-chain rayls-testnet` to bridge to the external testnet instead. The contracts deploy runs with `HUB_ENABLED=false`, writes no `PNH_*` values into the per-participant env files, and the CTS detects hub-less mode from their absence.
+The default topology runs the environment **without the Private Network Hub**, mirroring `start_dev.sh --no-hub` in the `rayls-sovereign-relayer` repo: no `private-network-hub` (Besu), no private relayers, no proofs API, no governance and no audit explorer (those belong to the hub topologies — use `--with-hub` or `--full` for them). The privacy nodes intercommunicate through the **public chain only**, so a public chain is always configured — with `--local` it defaults to the `local` preset (an Axyl public chain inside the stack), making the whole system **fully self-contained on one host**; pass `--public-chain rayls-testnet` to bridge to the external testnet instead. The contracts deploy runs with `HUB_ENABLED=false`, writes no `PNH_*` values into the per-participant env files, and the CTS detects hub-less mode from their absence.
 
 ```bash
 ./rayls init --local                                 # single PN <-> local public chain, fully isolated
@@ -201,7 +202,7 @@ The default topology runs the environment **without the Private Network Hub**, m
 ./rayls init --local --public-chain rayls-testnet    # hub-less, bridged to the testnet
 ```
 
-> Hub-less needs the `HUB_ENABLED`-aware contracts deploy and the hub-less-capable CTS, which ship with `version/3.0.1` of `rayls-privacy-contracts` / `rayls-privacy-relayer-api`. The published ECR images predate that, so hub-less currently applies to `--local` inits only (pulled-image inits keep the minimal hub); the CLI records the build sources in the stack `.env` — preferring the local sibling checkouts (`CONTRACTS_SRC`/`RELAYER_SRC`, so in-flight hub-less branches build as checked out) and falling back to the `version/3.0.1` git contexts (`CONTRACTS_REF`/`RELAYER_REF`). Override either in `.env` if needed.
+> Hub-less needs the `HUB_ENABLED`-aware contracts deploy and the hub-less-capable CTS, which ship in the 3.0.1 `rayls-sovereign-contracts` / `rayls-sovereign-relayer` components — now published to ECR, so hub-less is the default for pulled-image inits too. For `--local`, the CLI records the build sources in the stack `.env` — preferring the local sibling checkouts (`CONTRACTS_SRC`/`RELAYER_SRC`, so in-flight hub-less branches build as checked out) and falling back to the `main` git contexts (`CONTRACTS_REF`/`RELAYER_REF`). Override either in `.env` if needed.
 
 #### 4. Privacy node only
 
@@ -224,17 +225,17 @@ Adds Grafana (`:3300`), Loki, Prometheus, Tempo, and eBPF auto-instrumentation. 
 
 #### 6. With Blockscout explorers
 
-Adds a Blockscout backend + frontend per listed participant (proxied behind nginx). Opt-in by default; default-on with `--full`.
+Runs a Blockscout backend + frontend per participant (proxied behind nginx), **by default in every mode**. `--blockscout <list>` narrows the set; `--no-blockscout` disables them.
 
 ```bash
-./rayls init --blockscout a                # explorer for the default single node -> http://localhost:10004
-./rayls init --full --blockscout a,b,c,d
-./rayls init --full --blockscout ""        # disable Blockscout
+./rayls init                               # explorer for the default single node -> http://localhost:10004
+./rayls init --full --blockscout a,b      # only participants a and b get explorers
+./rayls init --no-blockscout               # no explorers
 ```
 
-#### 7. Local images (dev mode)
+#### 7. Local builds (dev mode)
 
-Skips ECR pulls and uses locally built Rayls images. Combines with any of the above. Useful when iterating on Rayls source out-of-tree.
+Builds the Rayls app components from source (pinned git refs, or your checkouts via `rayls dev`) instead of pulling their ECR images; infra images are still pulled. Combines with any of the above. Useful when iterating on Rayls source out-of-tree.
 
 ```bash
 ./rayls init --local
@@ -333,9 +334,10 @@ After successful initialization, the exposed services depend on the mode.
 
 **Default (local privacy node → public chain):**
 *   **Privacy Node RPC:** `http://localhost:8545` — Axyl EVM JSON-RPC (chain id `12345`, gasless)
-*   **Private Network Hub:** `http://localhost:3445` — the minimal commit chain (only with `--with-hub` or pulled-image inits; hub-less stacks have none)
+*   **Private Network Hub:** `http://localhost:3445` — the minimal commit chain (only with `--with-hub` or `--full`; the hub-less default has none)
 *   **Pubrelayer:** `http://localhost:9050` — bridges to the public chain
-*   **KOS (Key Orchestration):** `http://localhost:8080`
+*   **KOS (Key Orchestration):** `localhost:8080` — the CTS gRPC endpoint (mTLS, not plain HTTP)
+*   **Blockscout explorer:** `http://localhost:10004` — privacy-chain explorer for node `a` (default-on; per-node at `10004 + 100·i`)
 
 **Full stack (`--full`) — additional shared services:**
 *   **Block Explorer:** `http://localhost:8181` - View blockchain transactions and blocks
@@ -359,36 +361,40 @@ A bare `rayls init` pulls the published `rayls-demo` images from ECR. `rayls ini
 
 | Image group | default `rayls init` (remote) | `rayls init --local` (from source) |
 |---|---|---|
-| kos, pubrelayer, backend, contracts | published ECR `rayls-demo` images | **built by Docker** from the pinned git refs, or your checkouts via `rayls dev` |
+| kos, pubrelayer, private relayer, contracts | published ECR `rayls-demo` images | **built by Docker** from the pinned git refs (the `rayls-sovereign-*` repos on `main`), or your checkouts via `rayls dev` |
+| `--full` extras: governance-api/listener/flagger, proofs-api (gnark), audit-explorer | ECR | **built by Docker** from their `rayls-sovereign-*` repos on `main` (see note on gnark's Git-LFS keys below) |
 | Axyl privacy node | pulled from ECR | pulled from ECR + retagged (a local `rayls-privacy-axyl:latest` you built yourself is left alone) |
-| mongodb, nats | ECR | ECR (pulled — infra images aren't source-built) |
-| Third-party (postgres, mongo-express, blockscout, nginx, grafana) | public registries | public registries |
-| `--full` extras (Private Network Hub, governance-api/listener/flagger, audit-explorer, proofs-api, private relayer) | ECR | ⚠️ **not source-buildable yet** — they fall back to local short-name images and must already be present |
+| nats, Private Network Hub (Besu) | ECR | ECR (pulled — infra images aren't source-built) |
+| Third-party (postgres, blockscout, nginx, grafana) | public registries | public registries |
 
 The published `rayls-demo` service images are **multi-arch (amd64 + arm64)**, so remote `rayls init` runs natively on both Intel/AMD and Apple Silicon. Use `--local` when you want to build from a specific ref or hack on a component — not as an architecture workaround.
 
+> ⚠️ **gnark (`proofs-api`) uses Git-LFS.** Its proving keys are Git-LFS blobs, which a pinned **git-context** build can't fetch, so the default `--local` build of `proofs-api` would ship pointer files. For a working Enygma stack, run `rayls dev gnark` (clones the repo and runs `git lfs pull`) or use the pulled ECR image. The hub-less default stack never builds `proofs-api`, so this only matters for `--with-hub` / `--full`.
+>
+> The `rayls-sovereign-ops-api` service (the former backend) is intentionally **not** wired into the CLI.
+
 ## Choosing a version
 
-In `--local` mode every app component builds from a pinned git ref. One variable in `.env` (or the environment) selects the whole set once the repos tag coordinated releases:
+In `--local` mode every app component builds from a pinned git ref. By default that ref is **`main`** of each component's public `rayls-sovereign-*` repo — the 3.0.1 code, which the repos currently carry as a single `main` branch (no version tags yet). Once the repos tag coordinated releases, one variable in `.env` (or the environment) selects the whole set:
 
 ```bash
-RAYLS_VERSION=3.0.0        # all components build from tag v3.0.0
+RAYLS_VERSION=3.0.2        # all components build from tag v3.0.2 (once such tags exist)
 ```
 
 Any single component can deviate — point it at a tag, branch, or your own fork:
 
 ```bash
-BACKEND_REF=fix/reorg-handling                              # branch on the canonical repo
-RELAYER_REF=v3.0.0                                          # a specific tag
-BACKEND_REPO=git@github.com:you/rayls-privacy-backend.git   # your fork
-BACKEND_SRC=../rayls-privacy-backend                        # a local checkout (what `rayls dev` sets)
+RELAYER_REF=fix/reorg-handling                                   # branch on the canonical repo
+CONTRACTS_REF=main                                               # a specific ref
+RELAYER_REPO=git@github.com:you/rayls-sovereign-relayer.git      # your fork
+CONTRACTS_SRC=../rayls-sovereign-contracts                       # a local checkout (what `rayls dev` sets)
 ```
 
 Re-run `rayls init --local` after changing `RAYLS_VERSION` / `*_REF` / `*_REPO` (they're baked into the generated compose file); `*_SRC` changes apply on the next `docker compose up` without regenerating.
 
 ### Configuration reference (`.env`)
 
-The stack directory's `.env` file drives both the CLI and compose; the process environment always wins over the file. See [.env.example](.env.example) for a commented template. The component prefixes are `CONTRACTS`, `RELAYER` (kos + pubrelayer), and `BACKEND`.
+The stack directory's `.env` file drives both the CLI and compose; the process environment always wins over the file. See [.env.example](.env.example) for a commented template. The component prefixes are `CONTRACTS`, `RELAYER` (kos + pubrelayer + private relayer), `GOVERNANCE`, `GNARK`, and `AUDITOR`.
 
 | Variable | Purpose | Applies |
 |---|---|---|
@@ -400,24 +406,26 @@ The stack directory's `.env` file drives both the CLI and compose; the process e
 | `RAYLS_SRC_DIR` | Where `rayls dev` looks for / clones checkouts (default: parent of the stack dir) | `rayls dev` |
 | `RAYLS_AXYL_IMAGE` | Image to pull + retag as `rayls-privacy-axyl:latest` in `--local` | next `init --local` |
 
-> **Default refs** (until the component repos tag coordinated `v<X.Y.Z>` releases in lockstep): contracts → `lean-no-pnh-3.0.0`, relayer & backend → `v3.0.0`. Set `RAYLS_VERSION` or a per-component `*_REF` to override.
+> **Default refs** (until the component repos tag coordinated `v<X.Y.Z>` releases in lockstep): every component defaults to `main` — the `rayls-sovereign-*` repos' 3.0.1 code. Set `RAYLS_VERSION` or a per-component `*_REF` to override.
 
 ## Working on a component (hot reload)
 
 `rayls dev <component>` switches a component from its pinned build to a local checkout you can edit, with hot reload via `rayls watch`. See **[DEV_MODE.md](DEV_MODE.md)** for the full guide. In short:
 
 ```bash
-./rayls dev backend        # clone (if needed) + switch backend to a local checkout you edit
+./rayls dev relayer        # clone (if needed) + switch relayer to a local checkout you edit
 ./rayls watch              # sync saves into the container; air rebuilds & restarts in ~seconds
 ./rayls dev --status       # what's in dev mode?
-./rayls dev --off backend  # back to the pinned build
+./rayls dev --off relayer  # back to the pinned build
 ```
 
 | Component | Repo | Services | Hot reload |
 | --- | --- | --- | --- |
-| `relayer` | rayls-privacy-relayer-api | `kos-*`, `pubrelayer-*` | yes |
-| `backend` | rayls-privacy-backend | `backend-*` | yes |
-| `contracts` | rayls-privacy-contracts | `contracts` | no — builds from your checkout, but deploys are explicit: re-run `rayls init --local` (or restart the contracts service) after contract changes |
+| `relayer` | rayls-sovereign-relayer | `kos-*`, `pubrelayer-*`, `relayer-*` | yes |
+| `governance` | rayls-sovereign-pnh-governance | `governance-api`, `governance-listener`, `governance-flagger` | no — build from checkout, rebuild to apply (`--full` only) |
+| `gnark` | rayls-sovereign-gnark-api | `proofs-api` | no — Git-LFS keys; use `rayls dev gnark` (LFS-aware) or the pulled image |
+| `auditor` | rayls-sovereign-pnh-auditor-ui | `audit-explorer` | no — Angular→nginx build from checkout (`--full` only) |
+| `contracts` | rayls-sovereign-contracts | `contracts` | no — builds from your checkout, but deploys are explicit: re-run `rayls init --local` (or restart the contracts service) after contract changes |
 | node | axyl | `privacy-node-*` | no — pulled as a published image; build it yourself for node work |
 
 ## Architecture

@@ -57,7 +57,7 @@ func TestRegenerateDevOverride(t *testing.T) {
 	if err := os.WriteFile("docker-compose.yaml", []byte(testComposeYAML), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(".env", []byte("RELAYER_SRC=/home/dev/rayls-privacy-relayer-api\nCONTRACTS_SRC=/home/dev/rayls-privacy-contracts\n"), 0644); err != nil {
+	if err := os.WriteFile(".env", []byte("RELAYER_SRC=/home/dev/rayls-sovereign-relayer\nCONTRACTS_SRC=/home/dev/rayls-sovereign-contracts\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,7 +105,7 @@ func TestRegenerateDevOverride(t *testing.T) {
 
 	// contracts builds from the checkout but never hot-reloads
 	contracts := serviceSection(s, "contracts")
-	if !strings.Contains(contracts, `context: "/home/dev/rayls-privacy-contracts"`) {
+	if !strings.Contains(contracts, `context: "/home/dev/rayls-sovereign-contracts"`) {
 		t.Errorf("contracts should build from the local checkout:\n%s", contracts)
 	}
 	for _, forbidden := range []string{"watch", "command: air", "gocache"} {

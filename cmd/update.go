@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	manifestURL = "https://rayls-cli.s3.eu-west-2.amazonaws.com/manifest.json"
+	// Binaries + manifest are served via the Cloudflare CDN in front of the
+	// (private) rayls-cli S3 bucket; the direct S3 URL is not publicly reachable.
+	manifestURL = "https://cli.rayls.com/manifest.json"
 	cacheTTL    = 24 * time.Hour
 )
 

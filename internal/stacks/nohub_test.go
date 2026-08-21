@@ -15,7 +15,7 @@ import (
 
 // pinLocalSources records the hub-less build sources for a hub-less stack:
 // the local sibling checkout via <PREFIX>_SRC when one exists, else the
-// version/3.0.1 ref pin — never clobbering a source the user already chose.
+// localSourcesRef (main) ref pin — never clobbering a source the user already chose.
 // Set-but-empty env vars neutralize any ambient pins on the machine running
 // the tests AND exercise the guard's file-over-empty-env behavior (a bare
 // `export CONTRACTS_REF=` must not make pinLocalSources overwrite an explicit
@@ -47,7 +47,7 @@ func TestPinLocalSources(t *testing.T) {
 	}
 
 	// A sibling checkout wins over the ref pin: <srcRoot>/<DirName> with .git.
-	contractsCheckout := filepath.Join(root, "rayls-privacy-contracts")
+	contractsCheckout := filepath.Join(root, "rayls-sovereign-contracts")
 	if err := os.MkdirAll(filepath.Join(contractsCheckout, ".git"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestPinLocalSources(t *testing.T) {
 	}
 	// Recorded RELATIVE (resolved against the stack dir by compose and every
 	// rayls command) so the .env stays portable across machines.
-	wantSrc := filepath.Join("..", "rayls-privacy-contracts")
+	wantSrc := filepath.Join("..", "rayls-sovereign-contracts")
 	if vars["CONTRACTS_SRC"] != wantSrc {
 		t.Errorf("sibling present: CONTRACTS_SRC = %q, want %q", vars["CONTRACTS_SRC"], wantSrc)
 	}
