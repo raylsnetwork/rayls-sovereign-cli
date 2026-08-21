@@ -41,11 +41,12 @@ func TestLocalStackStillHasRegistryImages(t *testing.T) {
 	}
 
 	// ECR images --local deliberately keeps pulling (no source-build path).
+	// Only the genuinely non-source-built infra remains: NATS and the Besu
+	// private-network-hub. The relayer, proofs-api (gnark), governance trio and
+	// audit-explorer are now source-built (see the Components registry).
 	for _, image := range []string{
 		raylsECRPrefix + "rayls-nats:latest",
 		raylsECRPrefix + "rayls-private-network-hub:latest",
-		raylsECRPrefix + "rayls-relayer:latest",
-		raylsECRPrefix + "rayls-proof-api:latest",
 	} {
 		if !pulled[image] {
 			t.Errorf("%s should still be pulled in --local mode", image)
@@ -53,7 +54,12 @@ func TestLocalStackStillHasRegistryImages(t *testing.T) {
 	}
 	// Source-built components must not be in the pull set.
 	for image := range pulled {
-		for _, short := range []string{"rayls-kos:", "rayls-pubrelayer:", "rayls-contracts:", "rayls-privacy-axyl:"} {
+		for _, short := range []string{
+			"rayls-kos:", "rayls-pubrelayer:", "rayls-relayer:", "rayls-contracts:",
+			"rayls-privacy-axyl:", "rayls-proof-api:",
+			"rayls-governance-api:", "rayls-governance-listener:", "rayls-governance-flagger:",
+			"rayls-audit-explorer:",
+		} {
 			if strings.HasPrefix(image, short) {
 				t.Errorf("%s should be built/never-pulled in --local mode, not pulled", image)
 			}

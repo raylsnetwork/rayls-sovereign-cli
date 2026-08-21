@@ -24,17 +24,37 @@ Components and the refs they build from (`internal/docker/sources.go`):
 
 | Component (`Key`) | Repo | Default ref | Images built |
 |---|---|---|---|
-| `contracts` | `rayls-privacy-contracts` | `lean-no-pnh-3.0.0` | `contracts` (deploy tooling) |
-| `relayer` | `rayls-privacy-relayer-api` | `v3.0.0` | `kos` (CTS) + `pubrelayer` |
-| `backend` | `rayls-privacy-backend` | `v3.0.0` | `backend` |
+| `contracts` | `rayls-sovereign-contracts` | `main` | `contracts` (deploy tooling) |
+| `relayer` | `rayls-sovereign-relayer` | `main` | `kos` (CTS) + `pubrelayer` + `relayer` (private) |
+| `governance` | `rayls-sovereign-pnh-governance` | `main` | `governance-api` + `-listener` + `-flagger` |
+| `gnark` | `rayls-sovereign-gnark-api` | `main` | `proofs-api` (Enygma proofs) |
+| `auditor` | `rayls-sovereign-pnh-auditor-ui` | `main` | `audit-explorer` (Angular → nginx) |
 
-Infra images (`mongodb`, `nats`, `private-network-hub`, `axyl` privacy node) are
-**not** source-built — they come from their normal images.
+The `rayls-sovereign-*` repos hold the **3.0.1** code as a single `main` branch
+(no version tags yet), so `main` is the default build ref. `governance`, `gnark`
+and the private `relayer` only appear in hub topologies (`--with-hub` / `--full`);
+`auditor` is `--full` only. The only Rayls images **not** source-built are the
+infra ones — `nats`, `private-network-hub` (Besu) — plus the `axyl` privacy node
+(pulled + retagged); everything else builds from the repos above.
 
-Because the repos are private, git contexts use SSH (`git@github.com:...`), so the
-build forwards your **ssh-agent** (`build.ssh: [default]`). Make sure your key is
-loaded (`ssh-add -l`). Once the repos are public over https this drops out
-automatically.
+> ⚠️ **gnark uses Git-LFS.** Its proving/verifying keys under `last_build/` are
+> Git-LFS blobs. A pinned **git-context** build (the default `--local`) does *not*
+> smudge LFS, so `proofs-api` would ship pointer files and fail to load keys. For
+> a working Enygma stack, either `rayls dev gnark` (clones with `git lfs pull` — a
+> local checkout, so LFS is smudged) or use the pulled ECR image. Non-Enygma
+> stacks (the hub-less default) never build `proofs-api`, so this doesn't apply.
+
+> **ops-api excluded on purpose.** The new `rayls-sovereign-ops-api` (the former
+> backend) is not run by the CLI and is not in the registry.
+
+> ⚠️ **The sovereign repos are currently PRIVATE**, so the default git contexts
+> use **SSH** (`git@github.com:…`) and the build forwards your **ssh-agent**
+> (`build.ssh: [default]`, added automatically for git@/ssh:// URLs). Make sure a
+> key with `raylsnetwork` access is loaded — `ssh-add -l` must list one (if it's
+> empty, `ssh-add ~/.ssh/id_ed25519` or your key). **TODO:** once the admin makes
+> the repos public, switch the `Repo` URLs in `internal/docker/sources.go` back
+> to `https://github.com/raylsnetwork/<name>.git` — the build then clones
+> anonymously and drops the ssh-agent requirement.
 
 ### Overriding refs / repos (per stack, via `.env`)
 
@@ -47,13 +67,14 @@ repo:  <PREFIX>_REPO  >   the registry default
 src:   <PREFIX>_SRC   (a local checkout path or any git URL; managed by `rayls dev`)
 ```
 
-`<PREFIX>` is `CONTRACTS`, `RELAYER`, or `BACKEND`. Examples (edit `.env` in the
-stack dir — no regeneration needed, compose interpolates at build time):
+`<PREFIX>` is `CONTRACTS`, `RELAYER`, `GOVERNANCE`, `GNARK`, or `AUDITOR`.
+Examples (edit `.env` in the stack dir — no regeneration needed, compose
+interpolates at build time):
 
 ```dotenv
-RELAYER_REF=version/3.0.1          # build the relayer from a different branch
-BACKEND_REPO=git@github.com:you/rayls-privacy-backend.git   # build from your fork
-RAYLS_VERSION=3.0.0                # sets the default ref to v3.0.0 for all components
+RELAYER_REF=my-feature-branch      # build the relayer from a different branch
+CONTRACTS_REPO=git@github.com:you/rayls-sovereign-contracts.git   # build from your fork
+RAYLS_VERSION=3.0.2                # default ref -> v3.0.2 for all components (needs matching vX.Y.Z tags; the sovereign repos have none yet)
 ```
 
 ---
@@ -75,12 +96,12 @@ checkout you can edit**. It:
    chain, NATS state) keeps running.
 
 ```bash
-rayls dev backend                        # hack on the backend (clones if needed)
-rayls dev relayer backend                # both at once
-rayls dev backend --repo git@github.com:you/rayls-privacy-backend.git   # your fork
-rayls dev relayer --src ~/code/rayls-privacy-relayer-api                 # existing checkout
+rayls dev relayer                        # hack on the relayer (clones if needed)
+rayls dev relayer contracts              # both at once
+rayls dev relayer --repo git@github.com:you/rayls-sovereign-relayer.git  # your fork
+rayls dev relayer --src ~/code/rayls-sovereign-relayer                   # existing checkout
 rayls dev --status                       # which components are in dev mode?
-rayls dev --off backend                  # back to the pinned from-source build
+rayls dev --off relayer                  # back to the pinned from-source build
 ```
 
 `--repo` / `--src` apply to a **single** component at a time.
@@ -89,9 +110,11 @@ rayls dev --off backend                  # back to the pinned from-source build
 
 | Component | Hot reload (`Watch`) | Notes |
 |---|---|---|
-| `relayer` (kos + pubrelayer) | ✅ | air rebuilds on save |
-| `backend` | ✅ | air rebuilds on save |
+| `relayer` (kos + pubrelayer + private relayer) | ✅ | air rebuilds on save |
 | `contracts` | ❌ | builds from your checkout, but **redeploys stay explicit** — a file watcher must not silently redeploy contracts |
+| `governance` | ❌ | builds from your checkout (production Dockerfiles); rebuild to apply |
+| `gnark` | ❌ | builds from your checkout; needs Git-LFS (see the ⚠️ note above) |
+| `auditor` | ❌ | Angular → nginx build from your checkout; rebuild to apply |
 
 ---
 
@@ -116,10 +139,10 @@ supported for watch.
 
 ```bash
 rayls init --local           # 1. build the whole stack from pinned source
-rayls dev backend            # 2. clone + switch the backend to a local checkout
-rayls watch                  # 3. edit backend source; saves hot-reload in ~seconds
+rayls dev relayer            # 2. clone + switch the relayer to a local checkout
+rayls watch                  # 3. edit relayer source; saves hot-reload in ~seconds
 # ...iterate...
-rayls dev --off backend      # 4. done — back to the pinned build
+rayls dev --off relayer      # 4. done — back to the pinned build
 ```
 
 For **contracts**, step 3 is different: edit your checkout, then trigger a

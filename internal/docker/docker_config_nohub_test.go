@@ -163,7 +163,7 @@ func TestGetDemoComposeConfigNoHubLean(t *testing.T) {
 func TestGetDemoComposeConfigNoHubLocalFromSource(t *testing.T) {
 	t.Chdir(t.TempDir())
 	// Simulate the pin GenerateDockerCompose writes for hub-less --local stacks.
-	if err := os.WriteFile(".env", []byte("CONTRACTS_REF=version/3.0.1\nRELAYER_REF=version/3.0.1\n"), 0644); err != nil {
+	if err := os.WriteFile(".env", []byte("CONTRACTS_REF=main\nRELAYER_REF=main\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	srcs, err := ResolveSources()
@@ -180,14 +180,14 @@ func TestGetDemoComposeConfigNoHubLocalFromSource(t *testing.T) {
 	if contracts.Build.Dockerfile != "Dockerfile.dev" {
 		t.Errorf("contracts dockerfile = %q, want Dockerfile.dev", contracts.Build.Dockerfile)
 	}
-	if want := "${CONTRACTS_SRC:-git@github.com:raylsnetwork/rayls-privacy-contracts.git#version/3.0.1}"; contracts.Build.Context != want {
+	if want := "${CONTRACTS_SRC:-git@github.com:raylsnetwork/rayls-sovereign-contracts.git#main}"; contracts.Build.Context != want {
 		t.Errorf("contracts context = %q, want %q", contracts.Build.Context, want)
 	}
 	kosA := compose.Services["kos-a"]
 	if kosA.Build == nil {
 		t.Fatalf("kos-a should have a build section in --local")
 	}
-	if want := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-privacy-relayer-api.git#version/3.0.1}"; kosA.Build.Context != want {
+	if want := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-sovereign-relayer.git#main}"; kosA.Build.Context != want {
 		t.Errorf("kos-a context = %q, want %q", kosA.Build.Context, want)
 	}
 }

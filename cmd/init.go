@@ -71,7 +71,7 @@ the public chain only. --with-hub adds the minimal Private Network Hub;
 		// via the public chain only. --with-hub opts the lean stack into the
 		// minimal Private Network Hub; --full always brings the complete hub
 		// stack. Hub-less needs the HUB_ENABLED-aware contracts deploy and the
-		// hub-less-capable CTS (>= version/3.0.1 of their repos), which the
+		// hub-less-capable CTS (the rayls-sovereign-* 3.0.1 sources on main), which the
 		// published ECR images predate — pulled-image stacks therefore keep the
 		// minimal hub until the images are republished (same conditional default
 		// as the public-chain preset below; documented in --help and README).

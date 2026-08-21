@@ -161,7 +161,16 @@ func localImage(image string, local bool) (string, string) {
 		return image, ""
 	}
 	shortName := strings.TrimPrefix(image, raylsECRPrefix)
-	for _, buildable := range []string{"rayls-kos", "rayls-pubrelayer", "rayls-contracts", "rayls-privacy-axyl"} {
+	// Every image here must have a matching attachBuild call in --local, or the
+	// short-name + pull_policy=never below leaves compose with "No such image".
+	// kos/pubrelayer/relayer come from the relayer component; governance trio
+	// from the governance component; proofs-api from gnark; audit-explorer from
+	// auditor; contracts from contracts; axyl is retagged by ensureAxylImage.
+	for _, buildable := range []string{
+		"rayls-kos", "rayls-pubrelayer", "rayls-relayer", "rayls-contracts", "rayls-privacy-axyl",
+		"rayls-governance-api", "rayls-governance-listener", "rayls-governance-flagger",
+		"rayls-proof-api", "rayls-audit-explorer",
+	} {
 		if strings.HasPrefix(shortName, buildable) {
 			return shortName, "never"
 		}
@@ -462,7 +471,7 @@ func getKosServices(participants []string, monitoring bool, local bool, lean boo
 	return services
 }
 
-func getRelayerServices(participants []string, monitoring bool, local bool) map[string]*Service {
+func getRelayerServices(participants []string, monitoring bool, local bool, srcs *Sources) map[string]*Service {
 	services := make(map[string]*Service)
 	otelSdkDisabled := "true"
 	otelEndpoint := ""
@@ -528,6 +537,11 @@ func getRelayerServices(participants []string, monitoring bool, local bool) map[
 			},
 			Environment: env,
 		}
+	}
+	// From-source build (--local): attach to the first participant's service
+	// only; siblings reuse the tag the build produces (same pattern as kos).
+	if len(participants) > 0 {
+		attachBuild(services["relayer-"+participants[0]], srcs, "relayer", "relayer")
 	}
 	return services
 }
@@ -898,12 +912,13 @@ func getContractsService(participants []string, local bool, pc *PublicChain, lea
 	}
 
 	// PULLED lean-with-hub mode uses a dedicated image tag that carries the
-	// PNH_ENABLED-aware deploy (built from rayls-privacy-contracts branch
-	// cli-lean-no-pnh). This keeps :latest — the non-lean default — untouched.
-	// Every --local stack (lean hub-less, lean with-hub, full) instead builds
-	// the mainline HUB_ENABLED-aware deploy from the pinned >= version/3.0.1
-	// sources (see the stack .env pins) and tags it :latest — one image serves
-	// all local topologies, HUB_ENABLED switching the deploy path.
+	// PNH_ENABLED-aware deploy (built from the old rayls-privacy-contracts
+	// branch cli-lean-no-pnh). This keeps :latest — the non-lean default —
+	// untouched. Every --local stack (lean hub-less, lean with-hub, full)
+	// instead builds the mainline HUB_ENABLED-aware deploy from the pinned
+	// rayls-sovereign-contracts main sources (see the stack .env pins) and
+	// tags it :latest — one image serves all local topologies, HUB_ENABLED
+	// switching the deploy path.
 	contractsRef := "public.ecr.aws/w0k9o1t3/rayls-demo/rayls-contracts:latest"
 	if lean && !noHub && !local {
 		contractsRef = "public.ecr.aws/w0k9o1t3/rayls-demo/rayls-contracts:lean-no-pnh"
@@ -932,7 +947,7 @@ func getContractsService(participants []string, local bool, pc *PublicChain, lea
 	// From-source build. attachBuild no-ops when srcs is nil (every non---local
 	// mode), so this covers exactly the --local stacks — lean (with or without
 	// hub) and full alike, all building the HUB_ENABLED-aware deploy from the
-	// pinned >= version/3.0.1 sources. Previously full+--local skipped the
+	// pinned rayls-sovereign-contracts main sources. Previously full+--local skipped the
 	// attach and silently depended on a rayls-contracts:latest image left
 	// behind by an earlier lean/hub-less build.
 	attachBuild(svc, srcs, "contracts", "contracts")
@@ -1214,6 +1229,18 @@ func GetDemoComposeConfig(participants []string, monitoring bool, blockscout []s
 		},
 	}
 
+	// From-source builds (--local) for the components defined inline above.
+	// attachBuild no-ops when srcs is nil (pulled mode); it flips the image to
+	// the short-name local build (see localImage's whitelist) + pull_policy=build.
+	// These services may be trimmed later by applyLeanNoPNH/applyNoHub, and the
+	// build section goes with them: proofs-api survives lean-with-hub; the
+	// governance trio and audit-explorer are --full only.
+	attachBuild(compose.Services["governance-api"], srcs, "governance", "governance-api")
+	attachBuild(compose.Services["governance-listener"], srcs, "governance", "governance-listener")
+	attachBuild(compose.Services["governance-flagger"], srcs, "governance", "governance-flagger")
+	attachBuild(compose.Services["proofs-api"], srcs, "gnark", "proofs-api")
+	attachBuild(compose.Services["audit-explorer"], srcs, "auditor", "audit-explorer")
+
 	if monitoring {
 		compose.Services["otel"] = &Service{
 			Image: "docker.io/grafana/otel-lgtm:latest",
@@ -1250,7 +1277,7 @@ func GetDemoComposeConfig(participants []string, monitoring bool, blockscout []s
 		compose.Services[name] = service
 	}
 
-	relayerServices := getRelayerServices(participants, monitoring, local)
+	relayerServices := getRelayerServices(participants, monitoring, local, srcs)
 	for name, service := range relayerServices {
 		compose.Services[name] = service
 	}
@@ -1313,8 +1340,8 @@ func GetDemoComposeConfig(participants []string, monitoring bool, blockscout []s
 // services are rewritten so they no longer wait on removed ones.
 //
 // The topology is deliberately NOT forked on image provenance: the published
-// ECR images still predate the version/3.0.1 components this shape needs (the
-// private relayer's config contract in particular), but they are being
+// ECR images still predate the 3.0.1 (rayls-sovereign-*) components this shape
+// needs (the private relayer's config contract in particular), but they are being
 // republished from the current codebases — the shape targets that, not
 // today's registry state.
 func applyLeanNoPNH(compose *DockerCompose, participants []string) {
@@ -1357,9 +1384,9 @@ func applyLeanNoPNH(compose *DockerCompose, participants []string) {
 // The runtime hub-less switch is downstream of the contracts deploy: with
 // HUB_ENABLED=false (set in getContractsService) the deploy writes no PNH_*
 // vars into the per-participant .X.env files, and the 3.0.1 CTS keys hub-less
-// mode off the absence of PNH_DEPLOYMENT_PROXY_REGISTRY. Requires contracts +
-// relayer-api components >= version/3.0.1 (see GenerateDockerCompose's source
-// pinning).
+// mode off the absence of PNH_DEPLOYMENT_PROXY_REGISTRY. Requires the 3.0.1
+// contracts + relayer components (rayls-sovereign-* on main; see
+// GenerateDockerCompose's source pinning).
 func applyNoHub(compose *DockerCompose, participants []string) {
 	drop := []string{
 		"private-network-hub",

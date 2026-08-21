@@ -251,7 +251,7 @@ func TestPersistPublicChainKey(t *testing.T) {
 
 	// Pre-existing .env content (build pins) must survive the upsert, and the
 	// file must be tightened to 0600 even though it started 0644.
-	if err := os.WriteFile(".env", []byte("# pins\nCONTRACTS_REF=version/3.0.1\n"), 0o644); err != nil {
+	if err := os.WriteFile(".env", []byte("# pins\nCONTRACTS_REF=main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -267,7 +267,7 @@ func TestPersistPublicChainKey(t *testing.T) {
 	if !strings.Contains(string(data), publicChainKeyVar+"="+key) {
 		t.Errorf(".env does not contain the persisted key line:\n%s", data)
 	}
-	if !strings.Contains(string(data), "CONTRACTS_REF=version/3.0.1") {
+	if !strings.Contains(string(data), "CONTRACTS_REF=main") {
 		t.Errorf("persisting the key clobbered existing .env content:\n%s", data)
 	}
 	info, err := os.Stat(".env")

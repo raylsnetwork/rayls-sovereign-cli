@@ -127,7 +127,7 @@ If a `docker-compose.yaml` already exists, you'll be prompted to overwrite or us
 
 **Options:**
 *   `--full`: Bring up the full multi-participant demo stack (local Private Network Hub / commit chain, governance, proofs API, multiple privacy nodes). Combine with `--members` and/or `--public-chain`.
-*   `--with-hub`: Include the **Private Network Hub** in the default (lean) stack — a **functional hub**: PNH plus the private relayer and proofs-api, so PN↔PNH messaging and Enygma work. Without it, **hub-less is the default**: no PNH, no private relayer, no proofs API — the privacy nodes intercommunicate via the public chain only. Hub-less currently applies to `--local` stacks only: it needs `rayls-privacy-contracts` / `rayls-privacy-relayer-api` `version/3.0.1`, which the published ECR images predate, so pulled-image inits keep the hub until the images catch up. Every `--local` init records its build sources in the stack `.env` — the local sibling checkouts (`../rayls-privacy-contracts`, `../rayls-privacy-relayer-api`, recorded as relative paths) via `CONTRACTS_SRC`/`RELAYER_SRC` when present (whatever branch is checked out there is what builds), else the `version/3.0.1` git contexts via `CONTRACTS_REF`/`RELAYER_REF`. `--full` always includes the full hub.
+*   `--with-hub`: Include the **Private Network Hub** in the default (lean) stack — a **functional hub**: PNH plus the private relayer and proofs-api, so PN↔PNH messaging and Enygma work. Without it, **hub-less is the default**: no PNH, no private relayer, no proofs API — the privacy nodes intercommunicate via the public chain only. Hub-less currently applies to `--local` stacks only: it needs the 3.0.1 `rayls-sovereign-contracts` / `rayls-sovereign-relayer` sources (on `main`), which the published ECR images predate, so pulled-image inits keep the hub until the images catch up. Every `--local` init records its build sources in the stack `.env` — the local sibling checkouts (`../rayls-sovereign-contracts`, `../rayls-sovereign-relayer`, recorded as relative paths) via `CONTRACTS_SRC`/`RELAYER_SRC` when present (whatever branch is checked out there is what builds), else the `main` git contexts via `CONTRACTS_REF`/`RELAYER_REF`. `--full` always includes the full hub.
 *   `--members <int>`: Number of privacy node participants. With `--full`: 2–6 (default **2**). For the hub-less default topology: 1–6 (default **1**) — the nodes intercommunicate via the public chain, so any count is meaningful. Ignored on hub-carrying lean stacks (`--with-hub` runs a single participant; use `--full` for the multi-participant hub).
 *   `--public-chain <preset>`: Public chain preset to bridge to — `local` (an Axyl public chain running **inside the stack**: service `public-chain`, RPC `localhost:8845`, chain id `7331`, deployer genesis-funded, no external connectivity) or `rayls-testnet` (the external testnet). Applied by default for the default (lean) stack — in the hub-less default the public chain is the privacy nodes' only interconnection path: **`local` with `--local`, `rayls-testnet` otherwise**. `--full --local` also defaults to `local` (the 3.0.1 source deploy requires a public chain); only `--full` with pulled images runs without one. Adds per-participant `pubrelayer` services.
 *   `--privacy-node-only`: Run just a single Axyl privacy node, with no bridge or surrounding services. Ignores all other flags.
@@ -193,7 +193,7 @@ PRIVATE_KEY_SYSTEM=<0x-hex> ./rayls init --full
 
 #### 3. Hub-less (the default topology)
 
-The default topology runs the environment **without the Private Network Hub**, mirroring `start_dev.sh --no-hub` in the `rayls-privacy-relayer-api` repo: no `private-network-hub` (Besu), no private relayers, no proofs API, no governance and no audit explorer (those belong to the hub topologies — use `--with-hub` or `--full` for them). The privacy nodes intercommunicate through the **public chain only**, so a public chain is always configured — with `--local` it defaults to the `local` preset (an Axyl public chain inside the stack), making the whole system **fully self-contained on one host**; pass `--public-chain rayls-testnet` to bridge to the external testnet instead. The contracts deploy runs with `HUB_ENABLED=false`, writes no `PNH_*` values into the per-participant env files, and the CTS detects hub-less mode from their absence.
+The default topology runs the environment **without the Private Network Hub**, mirroring `start_dev.sh --no-hub` in the `rayls-sovereign-relayer` repo: no `private-network-hub` (Besu), no private relayers, no proofs API, no governance and no audit explorer (those belong to the hub topologies — use `--with-hub` or `--full` for them). The privacy nodes intercommunicate through the **public chain only**, so a public chain is always configured — with `--local` it defaults to the `local` preset (an Axyl public chain inside the stack), making the whole system **fully self-contained on one host**; pass `--public-chain rayls-testnet` to bridge to the external testnet instead. The contracts deploy runs with `HUB_ENABLED=false`, writes no `PNH_*` values into the per-participant env files, and the CTS detects hub-less mode from their absence.
 
 ```bash
 ./rayls init --local                                 # single PN <-> local public chain, fully isolated
@@ -201,7 +201,7 @@ The default topology runs the environment **without the Private Network Hub**, m
 ./rayls init --local --public-chain rayls-testnet    # hub-less, bridged to the testnet
 ```
 
-> Hub-less needs the `HUB_ENABLED`-aware contracts deploy and the hub-less-capable CTS, which ship with `version/3.0.1` of `rayls-privacy-contracts` / `rayls-privacy-relayer-api`. The published ECR images predate that, so hub-less currently applies to `--local` inits only (pulled-image inits keep the minimal hub); the CLI records the build sources in the stack `.env` — preferring the local sibling checkouts (`CONTRACTS_SRC`/`RELAYER_SRC`, so in-flight hub-less branches build as checked out) and falling back to the `version/3.0.1` git contexts (`CONTRACTS_REF`/`RELAYER_REF`). Override either in `.env` if needed.
+> Hub-less needs the `HUB_ENABLED`-aware contracts deploy and the hub-less-capable CTS, which ship in the 3.0.1 `rayls-sovereign-contracts` / `rayls-sovereign-relayer` repos (on `main`). The published ECR images predate that, so hub-less currently applies to `--local` inits only (pulled-image inits keep the minimal hub); the CLI records the build sources in the stack `.env` — preferring the local sibling checkouts (`CONTRACTS_SRC`/`RELAYER_SRC`, so in-flight hub-less branches build as checked out) and falling back to the `main` git contexts (`CONTRACTS_REF`/`RELAYER_REF`). Override either in `.env` if needed.
 
 #### 4. Privacy node only
 
@@ -359,36 +359,40 @@ A bare `rayls init` pulls the published `rayls-demo` images from ECR. `rayls ini
 
 | Image group | default `rayls init` (remote) | `rayls init --local` (from source) |
 |---|---|---|
-| kos, pubrelayer, backend, contracts | published ECR `rayls-demo` images | **built by Docker** from the pinned git refs, or your checkouts via `rayls dev` |
+| kos, pubrelayer, private relayer, contracts | published ECR `rayls-demo` images | **built by Docker** from the pinned git refs (the `rayls-sovereign-*` repos on `main`), or your checkouts via `rayls dev` |
+| `--full` extras: governance-api/listener/flagger, proofs-api (gnark), audit-explorer | ECR | **built by Docker** from their `rayls-sovereign-*` repos on `main` (see note on gnark's Git-LFS keys below) |
 | Axyl privacy node | pulled from ECR | pulled from ECR + retagged (a local `rayls-privacy-axyl:latest` you built yourself is left alone) |
-| mongodb, nats | ECR | ECR (pulled — infra images aren't source-built) |
+| nats, Private Network Hub (Besu) | ECR | ECR (pulled — infra images aren't source-built) |
 | Third-party (postgres, mongo-express, blockscout, nginx, grafana) | public registries | public registries |
-| `--full` extras (Private Network Hub, governance-api/listener/flagger, audit-explorer, proofs-api, private relayer) | ECR | ⚠️ **not source-buildable yet** — they fall back to local short-name images and must already be present |
 
 The published `rayls-demo` service images are **multi-arch (amd64 + arm64)**, so remote `rayls init` runs natively on both Intel/AMD and Apple Silicon. Use `--local` when you want to build from a specific ref or hack on a component — not as an architecture workaround.
 
+> ⚠️ **gnark (`proofs-api`) uses Git-LFS.** Its proving keys are Git-LFS blobs, which a pinned **git-context** build can't fetch, so the default `--local` build of `proofs-api` would ship pointer files. For a working Enygma stack, run `rayls dev gnark` (clones the repo and runs `git lfs pull`) or use the pulled ECR image. The hub-less default stack never builds `proofs-api`, so this only matters for `--with-hub` / `--full`.
+>
+> The `rayls-sovereign-ops-api` service (the former backend) is intentionally **not** wired into the CLI.
+
 ## Choosing a version
 
-In `--local` mode every app component builds from a pinned git ref. One variable in `.env` (or the environment) selects the whole set once the repos tag coordinated releases:
+In `--local` mode every app component builds from a pinned git ref. By default that ref is **`main`** of each component's public `rayls-sovereign-*` repo — the 3.0.1 code, which the repos currently carry as a single `main` branch (no version tags yet). Once the repos tag coordinated releases, one variable in `.env` (or the environment) selects the whole set:
 
 ```bash
-RAYLS_VERSION=3.0.0        # all components build from tag v3.0.0
+RAYLS_VERSION=3.0.2        # all components build from tag v3.0.2 (once such tags exist)
 ```
 
 Any single component can deviate — point it at a tag, branch, or your own fork:
 
 ```bash
-BACKEND_REF=fix/reorg-handling                              # branch on the canonical repo
-RELAYER_REF=v3.0.0                                          # a specific tag
-BACKEND_REPO=git@github.com:you/rayls-privacy-backend.git   # your fork
-BACKEND_SRC=../rayls-privacy-backend                        # a local checkout (what `rayls dev` sets)
+RELAYER_REF=fix/reorg-handling                                   # branch on the canonical repo
+CONTRACTS_REF=main                                               # a specific ref
+RELAYER_REPO=git@github.com:you/rayls-sovereign-relayer.git      # your fork
+CONTRACTS_SRC=../rayls-sovereign-contracts                       # a local checkout (what `rayls dev` sets)
 ```
 
 Re-run `rayls init --local` after changing `RAYLS_VERSION` / `*_REF` / `*_REPO` (they're baked into the generated compose file); `*_SRC` changes apply on the next `docker compose up` without regenerating.
 
 ### Configuration reference (`.env`)
 
-The stack directory's `.env` file drives both the CLI and compose; the process environment always wins over the file. See [.env.example](.env.example) for a commented template. The component prefixes are `CONTRACTS`, `RELAYER` (kos + pubrelayer), and `BACKEND`.
+The stack directory's `.env` file drives both the CLI and compose; the process environment always wins over the file. See [.env.example](.env.example) for a commented template. The component prefixes are `CONTRACTS`, `RELAYER` (kos + pubrelayer + private relayer), `GOVERNANCE`, `GNARK`, and `AUDITOR`.
 
 | Variable | Purpose | Applies |
 |---|---|---|
@@ -400,24 +404,26 @@ The stack directory's `.env` file drives both the CLI and compose; the process e
 | `RAYLS_SRC_DIR` | Where `rayls dev` looks for / clones checkouts (default: parent of the stack dir) | `rayls dev` |
 | `RAYLS_AXYL_IMAGE` | Image to pull + retag as `rayls-privacy-axyl:latest` in `--local` | next `init --local` |
 
-> **Default refs** (until the component repos tag coordinated `v<X.Y.Z>` releases in lockstep): contracts → `lean-no-pnh-3.0.0`, relayer & backend → `v3.0.0`. Set `RAYLS_VERSION` or a per-component `*_REF` to override.
+> **Default refs** (until the component repos tag coordinated `v<X.Y.Z>` releases in lockstep): every component defaults to `main` — the `rayls-sovereign-*` repos' 3.0.1 code. Set `RAYLS_VERSION` or a per-component `*_REF` to override.
 
 ## Working on a component (hot reload)
 
 `rayls dev <component>` switches a component from its pinned build to a local checkout you can edit, with hot reload via `rayls watch`. See **[DEV_MODE.md](DEV_MODE.md)** for the full guide. In short:
 
 ```bash
-./rayls dev backend        # clone (if needed) + switch backend to a local checkout you edit
+./rayls dev relayer        # clone (if needed) + switch relayer to a local checkout you edit
 ./rayls watch              # sync saves into the container; air rebuilds & restarts in ~seconds
 ./rayls dev --status       # what's in dev mode?
-./rayls dev --off backend  # back to the pinned build
+./rayls dev --off relayer  # back to the pinned build
 ```
 
 | Component | Repo | Services | Hot reload |
 | --- | --- | --- | --- |
-| `relayer` | rayls-privacy-relayer-api | `kos-*`, `pubrelayer-*` | yes |
-| `backend` | rayls-privacy-backend | `backend-*` | yes |
-| `contracts` | rayls-privacy-contracts | `contracts` | no — builds from your checkout, but deploys are explicit: re-run `rayls init --local` (or restart the contracts service) after contract changes |
+| `relayer` | rayls-sovereign-relayer | `kos-*`, `pubrelayer-*`, `relayer-*` | yes |
+| `governance` | rayls-sovereign-pnh-governance | `governance-api`, `governance-listener`, `governance-flagger` | no — build from checkout, rebuild to apply (`--full` only) |
+| `gnark` | rayls-sovereign-gnark-api | `proofs-api` | no — Git-LFS keys; use `rayls dev gnark` (LFS-aware) or the pulled image |
+| `auditor` | rayls-sovereign-pnh-auditor-ui | `audit-explorer` | no — Angular→nginx build from checkout (`--full` only) |
+| `contracts` | rayls-sovereign-contracts | `contracts` | no — builds from your checkout, but deploys are explicit: re-run `rayls init --local` (or restart the contracts service) after contract changes |
 | node | axyl | `privacy-node-*` | no — pulled as a published image; build it yourself for node work |
 
 ## Architecture

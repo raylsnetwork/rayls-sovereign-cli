@@ -106,13 +106,16 @@ func participantIndex(serviceName string) int {
 
 // envFileFor returns the per-participant env file the dev (air) images read
 // via the ENV_FILE variable, matching what the base compose passes to the
-// production entrypoints via `--env`.
+// production entrypoints via `--env`. It uses the component's GlossaryPath
+// (the container-side /parfin config dir), NOT its DirName: the sovereign
+// repos were renamed but the deploy still writes the historical
+// rayls-privacy-* glossary paths.
 func envFileFor(c *docker.Component, serviceName string) string {
 	suffix := "A"
 	if i := strings.LastIndex(serviceName, "-"); i >= 0 && i == len(serviceName)-2 {
 		suffix = strings.ToUpper(serviceName[i+1:])
 	}
-	return fmt.Sprintf("/parfin/%s/.%s.env", c.DirName, suffix)
+	return fmt.Sprintf("%s/.%s.env", c.GlossaryPath, suffix)
 }
 
 // debugPortFor mirrors the GO_DEBUG_PORT layout of the base compose (dlv
@@ -151,6 +154,13 @@ func ensureCheckout(dir, repo, ref string) error {
 	checkout.Stderr = os.Stderr
 	if err := checkout.Run(); err != nil {
 		return fmt.Errorf("checking out %s in %s: %w", ref, dir, err)
+	}
+	// gnark stores its proving/verifying keys via Git-LFS; a plain clone leaves
+	// pointer files unless git-lfs smudged them. Pull explicitly so the checkout
+	// has real blobs. Best-effort: a no-op for non-LFS repos, and skipped (with
+	// a note) when git-lfs isn't installed.
+	if exec.Command("git", "-C", dir, "lfs", "pull").Run() != nil {
+		fmt.Printf("  (note: `git lfs pull` skipped in %s — install git-lfs if this component ships LFS assets, e.g. gnark)\n", dir)
 	}
 	return nil
 }

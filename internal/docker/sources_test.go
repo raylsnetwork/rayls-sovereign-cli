@@ -25,18 +25,18 @@ func resolveIn(t *testing.T, dotenv string) *Sources {
 func TestSourcesDefaults(t *testing.T) {
 	srcs := resolveIn(t, "")
 	for key, want := range map[string]string{
-		"contracts": "lean-no-pnh-3.0.0",
-		"relayer":   "v3.0.0",
+		"contracts": "main",
+		"relayer":   "main",
 	} {
 		if got := srcs.Ref(*ComponentByKey(key)); got != want {
 			t.Errorf("%s default ref = %q, want %q", key, got, want)
 		}
 	}
 	c := *ComponentByKey("relayer")
-	if got := srcs.Repo(c); got != "git@github.com:raylsnetwork/rayls-privacy-relayer-api.git" {
+	if got := srcs.Repo(c); got != "git@github.com:raylsnetwork/rayls-sovereign-relayer.git" {
 		t.Errorf("default repo = %q", got)
 	}
-	want := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-privacy-relayer-api.git#v3.0.0}"
+	want := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-sovereign-relayer.git#main}"
 	if got := srcs.BuildContext(c); got != want {
 		t.Errorf("context = %q, want %q", got, want)
 	}
@@ -76,15 +76,16 @@ func TestSourcesEnvFileAndProcessPrecedence(t *testing.T) {
 }
 
 func TestSourcesHTTPSRepoDropsSSH(t *testing.T) {
-	t.Setenv("CONTRACTS_REPO", "https://github.com/raylsnetwork/rayls-privacy-contracts.git")
+	// The sovereign repos are currently private git@ URLs, so the default
+	// context requests ssh-agent forwarding. An https override (a public fork,
+	// or once the repos go public) drops it.
+	t.Setenv("CONTRACTS_REPO", "https://github.com/raylsnetwork/rayls-sovereign-contracts.git")
 	srcs := resolveIn(t, "")
-	b := srcs.BuildSection("contracts", "contracts")
-	if len(b.Ssh) != 0 {
-		t.Errorf("https context should not request ssh forwarding, got %v", b.Ssh)
+	if b := srcs.BuildSection("contracts", "contracts"); len(b.Ssh) != 0 {
+		t.Errorf("https override should not request ssh forwarding, got %v", b.Ssh)
 	}
-	sshBuild := srcs.BuildSection("relayer", "kos")
-	if len(sshBuild.Ssh) != 1 {
-		t.Errorf("ssh context should request agent forwarding, got %v", sshBuild.Ssh)
+	if b := srcs.BuildSection("relayer", "kos"); len(b.Ssh) != 1 {
+		t.Errorf("default git@ context should request ssh agent forwarding, got %v", b.Ssh)
 	}
 }
 
@@ -106,8 +107,8 @@ func TestSourcesBuildSectionUsesProductionDockerfile(t *testing.T) {
 }
 
 func TestSourcesSrcFromEnvFile(t *testing.T) {
-	srcs := resolveIn(t, "CONTRACTS_SRC=../rayls-privacy-contracts\n")
-	if got := srcs.Src(*ComponentByKey("contracts")); got != "../rayls-privacy-contracts" {
+	srcs := resolveIn(t, "CONTRACTS_SRC=../rayls-sovereign-contracts\n")
+	if got := srcs.Src(*ComponentByKey("contracts")); got != "../rayls-sovereign-contracts" {
 		t.Errorf("Src = %q", got)
 	}
 }

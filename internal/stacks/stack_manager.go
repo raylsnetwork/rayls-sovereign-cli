@@ -64,7 +64,8 @@ func GenerateDockerCompose(participants []string, monitoring bool, blockscout []
 				// Re-record the pins even when keeping the file: the kept
 				// compose still interpolates ${<X>_SRC:-<git ref>} from .env
 				// on every `up`, and missing pins (e.g. .env deleted to
-				// reset the key) silently revert builds to 3.0.0-era refs.
+				// reset the key) silently revert builds to the component
+				// DefaultRef (rayls-sovereign-* main).
 				if local {
 					if err := pinLocalSources(); err != nil {
 						return false, err
@@ -117,12 +118,14 @@ func GenerateDockerCompose(participants []string, monitoring bool, blockscout []
 }
 
 // localSourcesRef is the ref --local builds contracts/relayer from when no
-// sibling checkout exists: DefaultRefs pin the 3.0.0 images' refs, predating the
-// HUB_ENABLED deploy and the hub-less CTS. Enough for the relayer; the contracts
-// CLI deploy support (baked /parfin env templates, external-PC targeting) is NOT
-// on this ref, so a build from the pin fails its deploy — hence the
-// sibling-checkout preference and the warning below.
-const localSourcesRef = "version/3.0.1"
+// sibling checkout exists. The rayls-sovereign-* repos' `main` holds the 3.0.1
+// code: the contracts deploy support (baked /parfin env templates, the
+// HUB_ENABLED-gated deploy, the two-key public-chain funding) is all on main,
+// so a plain git-context build deploys without a sibling checkout. (One gap
+// remains upstream: the lean external-testnet retargeting of
+// deploy_public_chain — the default --local stack uses the in-stack `local`
+// public chain, which the deploy targets natively, so it is unaffected.)
+const localSourcesRef = "main"
 
 const localSourcesMarker = "# --local build sources recorded by `rayls init --local` — override or remove these pins to build from different sources."
 
@@ -137,8 +140,11 @@ func pinLocalSources() error {
 		return err
 	}
 	pinned := []string{}
-	for _, key := range []string{"contracts", "relayer"} {
-		comp := docker.ComponentByKey(key)
+	// Pin every buildable component (contracts, relayer, governance, gnark,
+	// auditor). Components whose services aren't in the current topology (e.g.
+	// governance in a hub-less stack) get an inert pin — harmless, and correct
+	// if the stack is later switched to a hub topology.
+	for _, comp := range docker.Components {
 		srcKey, refKey := comp.EnvPrefix+"_SRC", comp.EnvPrefix+"_REF"
 		if src := envfile.Lookup(fileVars, srcKey); src != "" {
 			if _, statErr := os.Stat(src); statErr != nil {
@@ -162,15 +168,12 @@ func pinLocalSources() error {
 			return err
 		}
 		pinned = append(pinned, fmt.Sprintf("%s=%s", refKey, localSourcesRef))
-		if key == "contracts" {
-			fmt.Printf("%s\n", yellow("Warning: no ../rayls-privacy-contracts checkout found — falling back to the remote\nversion/3.0.1 git context, which does not yet include the CLI deploy support.\nClone the contracts repo next to this stack (or set CONTRACTS_SRC in .env)\nuntil that support lands upstream."))
-		}
 	}
 	if len(pinned) > 0 {
 		if err := ensureLocalSourcesMarker(); err != nil {
 			return err
 		}
-		fmt.Printf("%s\n", yellow(fmt.Sprintf("--local: recorded build sources in .env (the registry's 3.0.0-era refs predate the\nHUB_ENABLED-aware deploy and the hub-less CTS). Override there if you want different\nsources.\n  %s", strings.Join(pinned, "\n  "))))
+		fmt.Printf("%s\n", yellow(fmt.Sprintf("--local: recorded build sources in .env (pinned to the rayls-sovereign-* repos on\nmain — the 3.0.1 code). Override there if you want to build from different sources.\n  %s", strings.Join(pinned, "\n  "))))
 	}
 	return nil
 }

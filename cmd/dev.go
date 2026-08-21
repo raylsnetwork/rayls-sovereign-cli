@@ -36,7 +36,7 @@ exception — they build from your checkout but redeploys stay explicit.
 Examples:
   rayls dev relayer                 # hack on the relayer (kos + pubrelayer)
   rayls dev relayer contracts       # both at once
-  rayls dev relayer --repo git@github.com:you/rayls-privacy-relayer-api.git
+  rayls dev relayer --repo git@github.com:you/rayls-sovereign-relayer.git
   rayls dev --status                # what's in dev mode?
   rayls dev --off relayer           # back to the pinned build`,
 	Run: func(cmd *cobra.Command, args []string) {
