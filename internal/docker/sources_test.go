@@ -33,10 +33,10 @@ func TestSourcesDefaults(t *testing.T) {
 		}
 	}
 	c := *ComponentByKey("relayer")
-	if got := srcs.Repo(c); got != "git@github.com:raylsnetwork/rayls-sovereign-relayer.git" {
+	if got := srcs.Repo(c); got != "https://github.com/raylsnetwork/rayls-sovereign-relayer.git" {
 		t.Errorf("default repo = %q", got)
 	}
-	want := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-sovereign-relayer.git#main}"
+	want := "${RELAYER_SRC:-https://github.com/raylsnetwork/rayls-sovereign-relayer.git#main}"
 	if got := srcs.BuildContext(c); got != want {
 		t.Errorf("context = %q, want %q", got, want)
 	}
@@ -76,16 +76,15 @@ func TestSourcesEnvFileAndProcessPrecedence(t *testing.T) {
 }
 
 func TestSourcesHTTPSRepoDropsSSH(t *testing.T) {
-	// The sovereign repos are currently private git@ URLs, so the default
-	// context requests ssh-agent forwarding. An https override (a public fork,
-	// or once the repos go public) drops it.
-	t.Setenv("CONTRACTS_REPO", "https://github.com/raylsnetwork/rayls-sovereign-contracts.git")
+	// The default sovereign repos are public https URLs — no ssh-agent needed.
+	// A git@/ssh:// override (e.g. a private fork) opts back into forwarding.
+	t.Setenv("RELAYER_REPO", "git@github.com:you/rayls-sovereign-relayer.git")
 	srcs := resolveIn(t, "")
 	if b := srcs.BuildSection("contracts", "contracts"); len(b.Ssh) != 0 {
-		t.Errorf("https override should not request ssh forwarding, got %v", b.Ssh)
+		t.Errorf("default https context should not request ssh forwarding, got %v", b.Ssh)
 	}
 	if b := srcs.BuildSection("relayer", "kos"); len(b.Ssh) != 1 {
-		t.Errorf("default git@ context should request ssh agent forwarding, got %v", b.Ssh)
+		t.Errorf("git@ override should request ssh agent forwarding, got %v", b.Ssh)
 	}
 }
 

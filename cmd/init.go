@@ -41,13 +41,12 @@ primary use case. Hub-less is the default topology: nodes intercommunicate via
 the public chain only. --with-hub adds the minimal Private Network Hub;
 --full brings the complete hub demo stack.
 
-  rayls init                          # published images -> rayls-testnet
-                                      # (keeps the minimal hub until the
-                                      # published images support hub-less)
   rayls init --local                  # fully local hub-less system: source
                                       # builds + a local Axyl public chain
   rayls init --local --members 3      # 3 hub-less privacy nodes, all local
-  rayls init --with-hub               # keep the minimal PNH explicitly
+  rayls init                          # published images -> rayls-testnet,
+                                      # hub-less (private node <-> public chain)
+  rayls init --with-hub               # add the minimal PNH explicitly
   rayls init --public-chain <preset>  # bridge to 'local' or 'rayls-testnet'
   rayls init --privacy-node-only      # just the Axyl node, no bridge
   rayls init --full [--members N]     # full multi-participant demo stack
@@ -69,19 +68,17 @@ the public chain only. --with-hub adds the minimal Private Network Hub;
 		// the default and is kept only as a deprecated no-op.)
 		lean := !fullStack
 
-		// Hub-less is the DEFAULT topology: the privacy nodes intercommunicate
-		// via the public chain only. --with-hub opts the lean stack into the
-		// minimal Private Network Hub; --full always brings the complete hub
-		// stack. Hub-less needs the hub-less-capable CTS (the rayls-sovereign-*
-		// 3.0.1 sources on main), which the published ECR images predate — the
-		// 3.0.0 CTS's ParticipantRegistrar calls
-		// ParticipantStorageV1.getChainViewData on its hub at startup, a
-		// function the PN-side replica doesn't implement, so it cannot run
-		// without a PNH even with the :lean-no-pnh deploy's PNH_ENABLED=false
-		// registry aliasing (verified empirically 2026-08-20). Pulled-image
-		// stacks therefore keep the minimal hub until the images are
-		// republished; --local stacks (3.0.1 source builds) run hub-less.
-		noHub := !fullStack && !withHub && localImages
+		// Hub-less is the DEFAULT topology in every non-full mode: the privacy
+		// nodes intercommunicate via the public chain only, and the contracts
+		// deploy runs with HUB_ENABLED=false (no Private Network Hub). --with-hub
+		// opts the lean stack back into the minimal PNH; --full always brings the
+		// complete hub stack. This holds for pulled-image inits too now that the
+		// published 3.0.1 ECR images carry the HUB_ENABLED-aware contracts deploy
+		// and the hub-less-capable CTS (the 3.0.0 CTS's ParticipantRegistrar
+		// called ParticipantStorageV1.getChainViewData on its hub at startup and
+		// could not run PNH-less; the 3.0.1 CTS keys hub-less off the absence of
+		// PNH_DEPLOYMENT_PROXY_REGISTRY, which is why the images had to ship first).
+		noHub := !fullStack && !withHub
 
 		// Resolve the public chain target.
 		//   - default (lean): always bridges; --public-chain overrides.
@@ -176,7 +173,7 @@ the public chain only. --with-hub adds the minimal Private Network Hub;
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().BoolVar(&fullStack, "full", false, "Bring up the full multi-participant demo stack (Private Network Hub, governance, multiple privacy nodes). Combine with --members and/or --public-chain.")
-	initCmd.Flags().BoolVar(&withHub, "with-hub", false, "Include the Private Network Hub (PNH) in the default (lean) stack: PNH plus the private relayer and proofs-api (PN<->PNH messaging, Enygma). Hub-less is the default topology for --local stacks; pulled-image stacks keep the hub regardless (their 3.0.0 CTS requires one) until the published images support hub-less. --full always includes the full hub (plus governance).")
+	initCmd.Flags().BoolVar(&withHub, "with-hub", false, "Include the Private Network Hub (PNH) in the default (lean) stack: PNH plus the private relayer and proofs-api (PN<->PNH messaging, Enygma). Hub-less is the default topology for both pulled-image and --local stacks; --full always includes the full hub (plus governance).")
 	initCmd.Flags().IntVar(&membersCount, "members", 2, "Number of privacy node participants: 2-6 with --full, 1-6 for the hub-less default (default 1 there). Ignored on hub-carrying lean stacks.")
 	initCmd.Flags().StringVar(&publicChainPreset, "public-chain", "", "Public chain preset to bridge to: 'local' (an Axyl public chain inside the stack) or 'rayls-testnet'. Defaults: lean stacks get 'local' with --local and 'rayls-testnet' otherwise; --full --local gets 'local' (the 3.0.1 source deploy requires a public chain). Only --full with pulled images runs without one.")
 	initCmd.Flags().BoolVar(&privacyNodeOnly, "privacy-node-only", false, "Run just a single Axyl privacy node, with no bridge or surrounding services. Ignores other flags.")

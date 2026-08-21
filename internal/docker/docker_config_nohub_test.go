@@ -180,14 +180,14 @@ func TestGetDemoComposeConfigNoHubLocalFromSource(t *testing.T) {
 	if contracts.Build.Dockerfile != "Dockerfile.dev" {
 		t.Errorf("contracts dockerfile = %q, want Dockerfile.dev", contracts.Build.Dockerfile)
 	}
-	if want := "${CONTRACTS_SRC:-git@github.com:raylsnetwork/rayls-sovereign-contracts.git#main}"; contracts.Build.Context != want {
+	if want := "${CONTRACTS_SRC:-https://github.com/raylsnetwork/rayls-sovereign-contracts.git#main}"; contracts.Build.Context != want {
 		t.Errorf("contracts context = %q, want %q", contracts.Build.Context, want)
 	}
 	kosA := compose.Services["kos-a"]
 	if kosA.Build == nil {
 		t.Fatalf("kos-a should have a build section in --local")
 	}
-	if want := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-sovereign-relayer.git#main}"; kosA.Build.Context != want {
+	if want := "${RELAYER_SRC:-https://github.com/raylsnetwork/rayls-sovereign-relayer.git#main}"; kosA.Build.Context != want {
 		t.Errorf("kos-a context = %q, want %q", kosA.Build.Context, want)
 	}
 }

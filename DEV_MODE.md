@@ -47,14 +47,11 @@ infra ones — `nats`, `private-network-hub` (Besu) — plus the `axyl` privacy 
 > **ops-api excluded on purpose.** The new `rayls-sovereign-ops-api` (the former
 > backend) is not run by the CLI and is not in the registry.
 
-> ⚠️ **The sovereign repos are currently PRIVATE**, so the default git contexts
-> use **SSH** (`git@github.com:…`) and the build forwards your **ssh-agent**
-> (`build.ssh: [default]`, added automatically for git@/ssh:// URLs). Make sure a
-> key with `raylsnetwork` access is loaded — `ssh-add -l` must list one (if it's
-> empty, `ssh-add ~/.ssh/id_ed25519` or your key). **TODO:** once the admin makes
-> the repos public, switch the `Repo` URLs in `internal/docker/sources.go` back
-> to `https://github.com/raylsnetwork/<name>.git` — the build then clones
-> anonymously and drops the ssh-agent requirement.
+The sovereign repos are **public**, so the default git contexts use **https** —
+no ssh-agent needed. If you override a component to a private fork with a
+`git@github.com:…` / `ssh://…` URL (via `<PREFIX>_REPO`), the build forwards your
+**ssh-agent** (`build.ssh: [default]`) automatically; make sure your key is loaded
+(`ssh-add -l`).
 
 ### Overriding refs / repos (per stack, via `.env`)
 

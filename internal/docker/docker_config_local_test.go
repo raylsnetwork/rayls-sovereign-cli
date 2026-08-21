@@ -76,17 +76,15 @@ func TestGetDemoComposeConfigLocalFromSource(t *testing.T) {
 	if kosA.Build == nil {
 		t.Fatalf("kos-a should have a build section")
 	}
-	wantCtx := "${RELAYER_SRC:-git@github.com:raylsnetwork/rayls-sovereign-relayer.git#main}"
+	wantCtx := "${RELAYER_SRC:-https://github.com/raylsnetwork/rayls-sovereign-relayer.git#main}"
 	if kosA.Build.Context != wantCtx {
 		t.Errorf("kos-a context = %q, want %q", kosA.Build.Context, wantCtx)
 	}
 	if kosA.Build.Dockerfile != "cts/Dockerfile" {
 		t.Errorf("kos-a dockerfile = %q, want cts/Dockerfile (production)", kosA.Build.Dockerfile)
 	}
-	// The sovereign repos are currently private git@ URLs, so the build forwards
-	// the ssh agent. (Flip to len==0 once they go public and the URLs become https.)
-	if len(kosA.Build.Ssh) != 1 || kosA.Build.Ssh[0] != "default" {
-		t.Errorf("kos-a should forward the ssh agent for the private git@ context, got %v", kosA.Build.Ssh)
+	if len(kosA.Build.Ssh) != 0 {
+		t.Errorf("kos-a should not forward the ssh agent for the public https git context, got %v", kosA.Build.Ssh)
 	}
 	if kosA.PullPolicy != "build" {
 		t.Errorf("kos-a pull_policy = %q, want build", kosA.PullPolicy)

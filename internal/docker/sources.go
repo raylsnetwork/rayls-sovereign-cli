@@ -43,26 +43,18 @@ type Component struct {
 }
 
 // Components is the registry of Rayls components buildable from source in
-// --local mode. Each points at its GitHub repo on `main`: the rayls-sovereign-*
-// repos hold the 3.0.1 code copied over as a single `main` branch (no version
-// tags yet), so `main` is the build ref.
-//
-// TODO(sovereign-public): the rayls-sovereign-* repos are currently PRIVATE, so
-// the default context uses SSH (git@...). BuildSection adds build.ssh:[default]
-// for git@/ssh:// URLs, so `docker compose up --build` forwards your ssh-agent
-// — run `ssh-add -l` and make sure a key with raylsnetwork access is loaded.
-// Once the admin makes the repos public, switch every Repo below back to
-// https://github.com/raylsnetwork/<name>.git (anonymous clone, no ssh-agent);
-// BuildSection then drops the ssh forwarding automatically. See also the
-// matching notes in README.md / DEV_MODE.md.
-//
-// Infra images (nats, private-network-hub, axyl) are not source-built — see
-// localImage/ensureAxylImage.
+// --local mode. Each points at its public GitHub repo on `main`: the
+// rayls-sovereign-* repos hold the 3.0.1 code copied over as a single `main`
+// branch (no version tags yet), so `main` is the build ref. The repos are
+// public, so the default context is an https git URL — no ssh-agent needed
+// (BuildSection only requests ssh forwarding for git@/ssh:// overrides, e.g. a
+// private fork). Infra images (nats, private-network-hub, axyl) are not
+// source-built — see localImage/ensureAxylImage.
 var Components = []Component{
 	{
 		Key:        "contracts",
 		EnvPrefix:  "CONTRACTS",
-		Repo:       "git@github.com:raylsnetwork/rayls-sovereign-contracts.git",
+		Repo:       "https://github.com/raylsnetwork/rayls-sovereign-contracts.git",
 		DirName:    "rayls-sovereign-contracts",
 		DefaultRef: "main",
 		Watch:      false, // contract changes need an explicit redeploy, not a file watcher
@@ -76,7 +68,7 @@ var Components = []Component{
 	{
 		Key:          "relayer",
 		EnvPrefix:    "RELAYER",
-		Repo:         "git@github.com:raylsnetwork/rayls-sovereign-relayer.git",
+		Repo:         "https://github.com/raylsnetwork/rayls-sovereign-relayer.git",
 		DirName:      "rayls-sovereign-relayer",
 		GlossaryPath: relayerPathV3, // deploy still writes /parfin/rayls-privacy-relayer-api
 		// The sovereign repos carry only a single `main` branch (the copied-over
@@ -95,7 +87,7 @@ var Components = []Component{
 	{
 		Key:          "governance",
 		EnvPrefix:    "GOVERNANCE",
-		Repo:         "git@github.com:raylsnetwork/rayls-sovereign-pnh-governance.git",
+		Repo:         "https://github.com/raylsnetwork/rayls-sovereign-pnh-governance.git",
 		DirName:      "rayls-sovereign-pnh-governance",
 		GlossaryPath: governancePathV3, // deploy writes /parfin/rayls-privacy-pnh-governance-api
 		DefaultRef:   "main",
@@ -109,7 +101,7 @@ var Components = []Component{
 	{
 		Key:        "gnark",
 		EnvPrefix:  "GNARK",
-		Repo:       "git@github.com:raylsnetwork/rayls-sovereign-gnark-api.git",
+		Repo:       "https://github.com/raylsnetwork/rayls-sovereign-gnark-api.git",
 		DirName:    "rayls-sovereign-gnark-api",
 		DefaultRef: "main",
 		Watch:      false,
@@ -125,7 +117,7 @@ var Components = []Component{
 	{
 		Key:        "auditor",
 		EnvPrefix:  "AUDITOR",
-		Repo:       "git@github.com:raylsnetwork/rayls-sovereign-pnh-auditor-ui.git",
+		Repo:       "https://github.com/raylsnetwork/rayls-sovereign-pnh-auditor-ui.git",
 		DirName:    "rayls-sovereign-pnh-auditor-ui",
 		DefaultRef: "main",
 		Watch:      false, // Angular -> nginx; no hot reload

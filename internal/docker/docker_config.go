@@ -923,18 +923,13 @@ func getContractsService(participants []string, local bool, pc *PublicChain, lea
 		env = append(env, "PUBLIC_CHAIN_ENABLED=${PUBLIC_CHAIN_ENABLED:-false}")
 	}
 
-	// PULLED lean-with-hub mode uses a dedicated image tag that carries the
-	// PNH_ENABLED-aware deploy (built from the old rayls-privacy-contracts
-	// branch cli-lean-no-pnh). This keeps :latest — the non-lean default —
-	// untouched. Every --local stack (lean hub-less, lean with-hub, full)
-	// instead builds the mainline HUB_ENABLED-aware deploy from the pinned
-	// rayls-sovereign-contracts main sources (see the stack .env pins) and
-	// tags it :latest — one image serves all local topologies, HUB_ENABLED
-	// switching the deploy path.
+	// Pulled modes use :latest — the 3.0.1 image with the HUB_ENABLED-aware
+	// deploy; one image serves every topology (lean hub-less, lean with-hub,
+	// full), HUB_ENABLED switching the deploy path. The :lean-no-pnh tag now
+	// points at the same digest and is kept only for backward compatibility.
+	// --local stacks build the same deploy from the pinned
+	// rayls-sovereign-contracts main sources instead (see the stack .env pins).
 	contractsRef := "public.ecr.aws/w0k9o1t3/rayls-demo/rayls-contracts:latest"
-	if lean && !noHub && !local {
-		contractsRef = "public.ecr.aws/w0k9o1t3/rayls-demo/rayls-contracts:lean-no-pnh"
-	}
 	image, pullPolicy := localImage(contractsRef, local)
 	svc := &Service{
 		Image:      image,
@@ -1351,11 +1346,9 @@ func GetDemoComposeConfig(participants []string, monitoring bool, blockscout []s
 // the cts-<p> alias) at startup. The depends_on graphs of the surviving
 // services are rewritten so they no longer wait on removed ones.
 //
-// The topology is deliberately NOT forked on image provenance: the published
-// ECR images still predate the 3.0.1 (rayls-sovereign-*) components this shape
-// needs (the private relayer's config contract in particular), but they are being
-// republished from the current codebases — the shape targets that, not
-// today's registry state.
+// The topology is uniform across image provenance: the published 3.0.1 ECR
+// images and the --local source builds both carry the components this shape
+// needs (the private relayer's config contract, the hub-less-capable CTS).
 func applyLeanNoPNH(compose *DockerCompose, participants []string) {
 	drop := []string{
 		"governance-api", "governance-listener", "governance-flagger",
