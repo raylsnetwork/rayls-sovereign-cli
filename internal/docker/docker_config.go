@@ -753,7 +753,14 @@ func getNatsService(local bool) *Service {
 // Paths are relative to the image's working dir, and the script avoids `$` and
 // single quotes — it rides inside a single-quoted compose `command:` that
 // compose interpolates before the container sees it.
-const contractsDeployCommand = `if ls .openzeppelin/*.json >/dev/null 2>&1 && [ -f docker/dev/contracts_deploy_healthcheck.js ]; then ` +
+//
+// The foundry.toml append switches off forge's lint-on-build (default-on since
+// forge 1.x, and the image's foundry.toml has no [lint] section): the image's
+// hardhat compile shells out to `forge build`, which otherwise floods every
+// deploy step AND every later `docker exec npx hardhat` (rayls verify) with
+// ~1500 lint-warning lines per compile, burying the real output.
+const contractsDeployCommand = `if [ -f foundry.toml ] && ! grep -q lint_on_build foundry.toml; then printf "\n[lint]\nlint_on_build = false\n" >> foundry.toml; fi; ` +
+	`if ls .openzeppelin/*.json >/dev/null 2>&1 && [ -f docker/dev/contracts_deploy_healthcheck.js ]; then ` +
 	`echo "[rayls] Contracts are already deployed on this stack (.openzeppelin manifests present)."; ` +
 	`echo "[rayls] Skipping the deploy: the deploy tasks refuse to redeploy over an existing manifest."; ` +
 	`echo "[rayls] Run rayls down -v and then rayls init to wipe the stack volumes and deploy from scratch."; ` +
