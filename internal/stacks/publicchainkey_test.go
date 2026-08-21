@@ -138,17 +138,45 @@ func TestResolvePublicChainKey(t *testing.T) {
 	})
 }
 
+// keyCheckCase is one CheckPublicChainKey scenario: the on-disk stack state
+// (compose + .env), the process env, and the expected outcome.
+type keyCheckCase struct {
+	name    string
+	compose string            // compose file content; "" = no docker-compose.yaml
+	envFile string            // stack .env content; "" = no .env
+	env     map[string]string // process env to set (empty value = set-but-empty)
+	wantErr string            // substring the error must contain; "" = expect success
+}
+
+func runKeyCheckCase(t *testing.T, tc keyCheckCase) {
+	t.Chdir(t.TempDir())
+	clearKeyEnv(t)
+	if tc.compose != "" {
+		writeCompose(t, tc.compose)
+	}
+	if tc.envFile != "" {
+		writeEnvFile(t, tc.envFile)
+	}
+	for k, v := range tc.env {
+		t.Setenv(k, v)
+	}
+	err := CheckPublicChainKey()
+	if tc.wantErr == "" {
+		if err != nil {
+			t.Errorf("expected nil, got %v", err)
+		}
+		return
+	}
+	if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+		t.Errorf("expected error containing %q, got %v", tc.wantErr, err)
+	}
+}
+
 func TestCheckPublicChainKey(t *testing.T) {
 	key := strings.Repeat("ab", 32)
 	keyLine := "  - " + docker.PublicChainKeyComposeEnv + "\n"
 
-	tests := []struct {
-		name    string
-		compose string            // compose file content; "" = no docker-compose.yaml
-		envFile string            // stack .env content; "" = no .env
-		env     map[string]string // process env to set (empty value = set-but-empty)
-		wantErr string            // substring the error must contain; "" = expect success
-	}{
+	tests := []keyCheckCase{
 		{name: "no compose file passes"},
 		{name: "local stack compose passes without key",
 			compose: "services: {}\n# no public chain key line\n"},
@@ -170,26 +198,7 @@ func TestCheckPublicChainKey(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Chdir(t.TempDir())
-			clearKeyEnv(t)
-			if tc.compose != "" {
-				writeCompose(t, tc.compose)
-			}
-			if tc.envFile != "" {
-				writeEnvFile(t, tc.envFile)
-			}
-			for k, v := range tc.env {
-				t.Setenv(k, v)
-			}
-			err := CheckPublicChainKey()
-			switch {
-			case tc.wantErr == "" && err != nil:
-				t.Errorf("expected nil, got %v", err)
-			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
-				t.Errorf("expected error containing %q, got %v", tc.wantErr, err)
-			}
-		})
+		t.Run(tc.name, func(t *testing.T) { runKeyCheckCase(t, tc) })
 	}
 }
 
