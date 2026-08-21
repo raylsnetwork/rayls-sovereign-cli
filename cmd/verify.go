@@ -205,19 +205,12 @@ func runVerifyPublicChain() error {
 	}
 	fmt.Printf("    public chain id: %s\n", chainID)
 
-	userIDBytes := make([]byte, 32)
-	if _, err := rand.Read(userIDBytes); err != nil {
-		return fmt.Errorf("rand: %w", err)
-	}
-	userID := "0x" + hex.EncodeToString(userIDBytes)
-
 	// Steps 2-3 are idempotent by intent and EXPECTED to fail on stacks whose
-	// deploy pre-registers the deployer (the 3.0.1 deploy does:
+	// deploy pre-registers the deployer (some deploys do:
 	// RNUserGovernanceV1__PublicAddressAlreadyMapped) — run them silently, name
 	// the KNOWN benign outcomes in one line, and surface anything else (the
 	// tasks swallow their own errors and exit 0, so the captured output is the
-	// only evidence there is). Both steps continue either way: the bridge's
-	// final balance poll is the ground truth.
+	// only evidence there is).
 	reportIdempotentStep := func(out string, err error, benignMarkers []string, benignNote string) {
 		failure := contractsTaskFailed(out, err)
 		if failure == nil {
@@ -229,33 +222,79 @@ func runVerifyPublicChain() error {
 				return
 			}
 		}
-		yellow.Printf("    step did not succeed (continuing — the bridge outcome below is the ground truth):\n    %s\n", outputTail(out, 4))
+		yellow.Printf("    step did not succeed:\n    %s\n", outputTail(out, 4))
+	}
+
+	registerDeployer := func() error {
+		userIDBytes := make([]byte, 32)
+		if _, err := rand.Read(userIDBytes); err != nil {
+			return fmt.Errorf("rand: %w", err)
+		}
+		userID := "0x" + hex.EncodeToString(userIDBytes)
+
+		out2, err2 := stacks.ExecContractsCaptureSilent([]string{
+			"npx", "hardhat", "createUser",
+			"--pn", "A",
+			"--user-id", userID,
+			"--public-address", verifyDeployerAddress,
+			"--private-address", verifyDeployerAddress,
+		})
+		// 0x609fe1e4 is the RNUserGovernanceV1__PublicAddressAlreadyMapped()
+		// selector: the same benign outcome, seen raw when the task's ethers call
+		// cannot decode the custom error.
+		reportIdempotentStep(out2, err2,
+			[]string{"PublicAddressAlreadyMapped", "already registered", "already exists", "0x609fe1e4"},
+			"deployer address already registered — continuing (expected when the contracts deploy pre-registers it)")
+
+		out3, err3 := stacks.ExecContractsCaptureSilent([]string{
+			"npx", "hardhat", "approveUser",
+			"--pn", "A",
+			"--user-id", userID,
+		})
+		reportIdempotentStep(out3, err3,
+			[]string{"has no address pairs", "already approved", "User does not exist"},
+			"approval not needed for this user — continuing (the deployer's mapping is already active)")
+		return nil
 	}
 
 	bold.Println(">> [2/8] Registering deployer as a user (idempotent)")
-	out2, err2 := stacks.ExecContractsCaptureSilent([]string{
-		"npx", "hardhat", "createUser",
-		"--pn", "A",
-		"--user-id", userID,
-		"--public-address", verifyDeployerAddress,
-		"--private-address", verifyDeployerAddress,
-	})
-	// 0x609fe1e4 is the RNUserGovernanceV1__PublicAddressAlreadyMapped()
-	// selector: the same benign outcome, seen raw when the task's ethers call
-	// cannot decode the custom error.
-	reportIdempotentStep(out2, err2,
-		[]string{"PublicAddressAlreadyMapped", "already registered", "already exists", "0x609fe1e4"},
-		"deployer address already registered — continuing (expected: the contracts deploy pre-registers it)")
-
 	bold.Println(">> [3/8] Approving the user")
-	out3, err3 := stacks.ExecContractsCaptureSilent([]string{
-		"npx", "hardhat", "approveUser",
-		"--pn", "A",
-		"--user-id", userID,
-	})
-	reportIdempotentStep(out3, err3,
-		[]string{"has no address pairs", "already approved", "User does not exist"},
-		"approval not needed for this user — continuing (the deployer's pre-registered mapping is already active)")
+	// The teleport in step 8 hard-requires the deployer to be a registered AND
+	// approved user on PN A (RNUserGovernanceV1__PrivateAddressNotMapped
+	// otherwise), and the registration tasks above tolerate benign
+	// already-mapped outcomes — so a transiently failed registration (seen live:
+	// a nonce race when verify runs right after init, while the deploy's
+	// background add-authorized-relayers txs from the SAME system account are
+	// still settling) must be caught HERE, not two minutes later as an opaque
+	// revert after the token deploy. Assert the mapping on-chain and retry the
+	// registration a few times before proceeding.
+	deployerApproved := false
+	for attempt := 1; attempt <= 3; attempt++ {
+		if attempt > 1 {
+			yellow.Printf("    deployer mapping not active yet — retrying registration (attempt %d/3)\n", attempt)
+			time.Sleep(5 * time.Second)
+		}
+		if err := registerDeployer(); err != nil {
+			return err
+		}
+		approved, checkErr := stacks.DeployerApprovedOnPNA(verifyDeployerAddress)
+		if checkErr != nil {
+			// The assertion exists to catch registration races, not to add its
+			// own failure mode: if the check itself can't run (RPC unreachable
+			// from the host, unexpected .env), warn and trust the tasks' output.
+			yellow.Printf("    could not verify the deployer registration on-chain (%v) — continuing on the registration tasks' word\n", checkErr)
+			deployerApproved = true
+			break
+		}
+		if approved {
+			deployerApproved = true
+			break
+		}
+	}
+	if !deployerApproved {
+		return fmt.Errorf("the deployer %s is not registered/approved on PN A after 3 attempts — the bridge in step 8 cannot work.\nInspect the registration tasks manually: docker exec <contracts> npx hardhat createUser --pn A ... (see `rayls logs contracts`)", verifyDeployerAddress)
+	}
+	green.Println("    deployer registration confirmed on-chain (approved address pair on PN A)")
 
 	suffixBytes := make([]byte, 3)
 	if _, err := rand.Read(suffixBytes); err != nil {
