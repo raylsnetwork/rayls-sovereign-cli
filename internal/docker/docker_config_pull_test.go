@@ -112,7 +112,9 @@ func TestBlockscoutBackendPullsPublishedImage(t *testing.T) {
 	if svc.Build != nil {
 		t.Errorf("blockscout-backend-a should have no build section, got context %q", svc.Build.Context)
 	}
-	if svc.Image != "blockscout/blockscout:latest" {
-		t.Errorf("blockscout-backend-a image = %q, want blockscout/blockscout:latest", svc.Image)
+	// Backend + frontend are a pinned matched pair (Docker Hub :latest is
+	// stale and skews against the ghcr frontend, breaking CORS and search).
+	if svc.Image != "ghcr.io/blockscout/blockscout:9.0.2" {
+		t.Errorf("blockscout-backend-a image = %q, want ghcr.io/blockscout/blockscout:9.0.2", svc.Image)
 	}
 }

@@ -206,6 +206,7 @@ func TestDependsOnConditionsSatisfiable(t *testing.T) {
 		"lean+pc":           GetDemoComposeConfig([]string{"a"}, false, nil, false, &pc, true, false, nil),
 		"full+pc+no-hub":    GetDemoComposeConfig([]string{"a", "b"}, false, nil, false, &pc, false, true, nil),
 		"lean+pc+no-hub":    GetDemoComposeConfig([]string{"a"}, false, nil, false, &pc, true, true, nil),
+		"lean+pc+bs":        GetDemoComposeConfig([]string{"a"}, false, []string{"a"}, false, &pc, true, false, nil),
 		"lean+localpc":      GetDemoComposeConfig([]string{"a"}, false, nil, true, &localPC, true, false, nil),
 		"nohub+localpc":     GetDemoComposeConfig([]string{"a", "b"}, false, nil, true, &localPC, false, true, nil),
 		"privacy-node-only": GetPrivacyNodeOnlyConfig(false),

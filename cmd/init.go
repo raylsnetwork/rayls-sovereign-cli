@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"os"
+	"strings"
+
 	"github.com/raylsnetwork/rayls-sovereign-cli/internal/docker"
 	"github.com/raylsnetwork/rayls-sovereign-cli/internal/stacks"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -13,6 +14,7 @@ import (
 var membersCount int
 var monitoringEnabled bool
 var blockscoutNodes string
+var noBlockscout bool
 var localImages bool
 var publicChainPreset string
 var privacyNodeOnly bool
@@ -39,12 +41,12 @@ primary use case. Hub-less is the default topology: nodes intercommunicate via
 the public chain only. --with-hub adds the minimal Private Network Hub;
 --full brings the complete hub demo stack.
 
-  rayls init --local                  # fully local hub-less system: source
-                                      # builds + a local Axyl public chain
-  rayls init --local --members 3      # 3 hub-less privacy nodes, all local
   rayls init                          # published images -> rayls-testnet
                                       # (keeps the minimal hub until the
                                       # published images support hub-less)
+  rayls init --local                  # fully local hub-less system: source
+                                      # builds + a local Axyl public chain
+  rayls init --local --members 3      # 3 hub-less privacy nodes, all local
   rayls init --with-hub               # keep the minimal PNH explicitly
   rayls init --public-chain <preset>  # bridge to 'local' or 'rayls-testnet'
   rayls init --privacy-node-only      # just the Axyl node, no bridge
@@ -70,11 +72,15 @@ the public chain only. --with-hub adds the minimal Private Network Hub;
 		// Hub-less is the DEFAULT topology: the privacy nodes intercommunicate
 		// via the public chain only. --with-hub opts the lean stack into the
 		// minimal Private Network Hub; --full always brings the complete hub
-		// stack. Hub-less needs the HUB_ENABLED-aware contracts deploy and the
-		// hub-less-capable CTS (the rayls-sovereign-* 3.0.1 sources on main), which the
-		// published ECR images predate — pulled-image stacks therefore keep the
-		// minimal hub until the images are republished (same conditional default
-		// as the public-chain preset below; documented in --help and README).
+		// stack. Hub-less needs the hub-less-capable CTS (the rayls-sovereign-*
+		// 3.0.1 sources on main), which the published ECR images predate — the
+		// 3.0.0 CTS's ParticipantRegistrar calls
+		// ParticipantStorageV1.getChainViewData on its hub at startup, a
+		// function the PN-side replica doesn't implement, so it cannot run
+		// without a PNH even with the :lean-no-pnh deploy's PNH_ENABLED=false
+		// registry aliasing (verified empirically 2026-08-20). Pulled-image
+		// stacks therefore keep the minimal hub until the images are
+		// republished; --local stacks (3.0.1 source builds) run hub-less.
 		noHub := !fullStack && !withHub && localImages
 
 		// Resolve the public chain target.
@@ -145,15 +151,19 @@ the public chain only. --with-hub adds the minimal Private Network Hub;
 
 		participants := []string{"a", "b", "c", "d", "e", "f"}[:members]
 
-		// Blockscout: opt-in in the default (lean) mode so a bare init stays
-		// light; default-on for the --full demo stack.
+		// Blockscout: default-on for every participant in every mode (a bare
+		// init gets an explorer for node a). --blockscout narrows the set,
+		// --no-blockscout disables it entirely.
 		var blockscout []string
-		if lean {
+		switch {
+		case noBlockscout:
 			if cmd.Flags().Changed("blockscout") {
-				blockscout = parseBlockscoutNodes(blockscoutNodes, participants)
+				yellow.Println("Note: --no-blockscout overrides --blockscout; no Blockscout services will run.")
 			}
-		} else {
+		case cmd.Flags().Changed("blockscout"):
 			blockscout = parseBlockscoutNodes(blockscoutNodes, participants)
+		default:
+			blockscout = participants
 		}
 
 		if err := stacks.InitStack(participants, monitoringEnabled, blockscout, localImages, publicChain, lean, noHub, noPull); err != nil {
@@ -166,12 +176,13 @@ the public chain only. --with-hub adds the minimal Private Network Hub;
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().BoolVar(&fullStack, "full", false, "Bring up the full multi-participant demo stack (Private Network Hub, governance, multiple privacy nodes). Combine with --members and/or --public-chain.")
-	initCmd.Flags().BoolVar(&withHub, "with-hub", false, "Include the Private Network Hub (PNH) in the default (lean) stack: PNH plus the private relayer and proofs-api (PN<->PNH messaging, Enygma). Hub-less is the default topology for --local stacks; pulled-image stacks keep the hub regardless until the published images support hub-less. --full always includes the full hub (plus governance).")
+	initCmd.Flags().BoolVar(&withHub, "with-hub", false, "Include the Private Network Hub (PNH) in the default (lean) stack: PNH plus the private relayer and proofs-api (PN<->PNH messaging, Enygma). Hub-less is the default topology for --local stacks; pulled-image stacks keep the hub regardless (their 3.0.0 CTS requires one) until the published images support hub-less. --full always includes the full hub (plus governance).")
 	initCmd.Flags().IntVar(&membersCount, "members", 2, "Number of privacy node participants: 2-6 with --full, 1-6 for the hub-less default (default 1 there). Ignored on hub-carrying lean stacks.")
 	initCmd.Flags().StringVar(&publicChainPreset, "public-chain", "", "Public chain preset to bridge to: 'local' (an Axyl public chain inside the stack) or 'rayls-testnet'. Defaults: lean stacks get 'local' with --local and 'rayls-testnet' otherwise; --full --local gets 'local' (the 3.0.1 source deploy requires a public chain). Only --full with pulled images runs without one.")
 	initCmd.Flags().BoolVar(&privacyNodeOnly, "privacy-node-only", false, "Run just a single Axyl privacy node, with no bridge or surrounding services. Ignores other flags.")
 	initCmd.Flags().BoolVar(&monitoringEnabled, "monitoring", false, "Enable monitoring stack (Grafana, Loki, Tempo, Prometheus)")
-	initCmd.Flags().StringVar(&blockscoutNodes, "blockscout", "a,b", "Comma-separated list of nodes to enable Blockscout for (e.g. 'a,b,c'). Opt-in by default; default-on with --full.")
+	initCmd.Flags().StringVar(&blockscoutNodes, "blockscout", "", "Comma-separated list of nodes to enable Blockscout for (e.g. 'a,b,c'). Defaults to every participant; use this to narrow the set, or --no-blockscout to disable.")
+	initCmd.Flags().BoolVar(&noBlockscout, "no-blockscout", false, "Disable the per-node Blockscout explorers (they run for every participant by default).")
 	initCmd.Flags().BoolVar(&localImages, "local", false, "Dev mode: build Rayls components (kos/CTS, pubrelayer, contracts) from source inside Docker — pinned git contexts by default, local checkouts via `rayls dev` — instead of pulling images from ECR. Also defaults --public-chain to 'local', making the stack fully self-contained.")
 	initCmd.Flags().BoolVar(&noPull, "no-pull", false, "Skip the image pull step; `up` fetches only missing images. Use to keep a locally-built image (e.g. a custom contracts build) instead of overwriting it from ECR.")
 	// --lean is now the default behavior; keep the flag as a deprecated no-op so

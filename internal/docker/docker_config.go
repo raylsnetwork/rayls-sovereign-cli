@@ -840,7 +840,12 @@ func getContractsService(participants []string, local bool, pc *PublicChain, lea
 		// the privacy node in the .X.env — which a 3.0.1 CTS would read as "hub
 		// enabled, at the PN" (silently wrong topology). Left defaulted (true),
 		// such an image tries to deploy the PNH, dials the absent private-hub
-		// host and fails loudly instead.
+		// host and fails loudly instead. (The aliasing is also insufficient for
+		// a genuinely hub-less PULLED stack: the 3.0.0 CTS's ParticipantRegistrar
+		// calls ParticipantStorageV1.getChainViewData on its "hub" at startup,
+		// which the PN-side ParticipantStorageReplicaV1 doesn't implement —
+		// verified empirically 2026-08-20 — so hub-less stays --local-only until
+		// the CTS images are republished from >= version/3.0.1.)
 		env = append(env, "HUB_ENABLED=false")
 		// deployCoreContractsBatch ABI-encodes process.env.PNH_CHAIN_ID into
 		// EndpointV1.initialize even hub-less (unset crashes ethers with "invalid
@@ -1572,7 +1577,13 @@ func getBlockscoutBackendService(node string, portBase, chainID, participantIdx 
 	privacyNode := fmt.Sprintf("privacy-node-%s", node)
 
 	return &Service{
-		Image:           "blockscout/blockscout:latest",
+		// Backend and frontend must be a same-era matched pair: Docker Hub
+		// `blockscout/blockscout:latest` is months stale while the ghcr frontend
+		// moves, and the skew breaks the UI (CORS preflight rejects the
+		// updated-gas-oracle header; /api/v2/search renamed address ->
+		// address_hash, crashing the search bar). If either is bumped, bump both
+		// and smoke-test those two endpoints.
+		Image:           "ghcr.io/blockscout/blockscout:9.0.2",
 		Restart:         "always",
 		StopGracePeriod: "5m",
 		Command:         `sh -c "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start"`,
@@ -1626,7 +1637,9 @@ func getBlockscoutFrontendService(node string, portBase, chainID, participantIdx
 	nodeUpper := strings.ToUpper(node)
 
 	return &Service{
-		Image:   "ghcr.io/blockscout/frontend:latest",
+		// Pinned as the matched pair of ghcr.io/blockscout/blockscout:9.0.2 —
+		// see getBlockscoutBackendService before bumping.
+		Image:   "ghcr.io/blockscout/frontend:v2.3.5",
 		Restart: "always",
 		Ports: []string{
 			fmt.Sprintf("127.0.0.1:%d:3000", portBase+3),
