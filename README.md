@@ -65,28 +65,28 @@ Download the latest binary for your platform:
 
 **macOS (Apple Silicon):**
 ```bash
-curl -fL https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-darwin-arm64 -o rayls
+curl -fL https://cli.rayls.com/rayls-darwin-arm64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
 
 **macOS (Intel):**
 ```bash
-curl -fL https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-darwin-amd64 -o rayls
+curl -fL https://cli.rayls.com/rayls-darwin-amd64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
 
 **Linux (x86_64):**
 ```bash
-curl -fL https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-linux-amd64 -o rayls
+curl -fL https://cli.rayls.com/rayls-linux-amd64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```
 
 **Linux (ARM64):**
 ```bash
-curl -fL https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-linux-arm64 -o rayls
+curl -fL https://cli.rayls.com/rayls-linux-arm64 -o rayls
 chmod +x rayls
 sudo mv rayls /usr/local/bin/
 ```

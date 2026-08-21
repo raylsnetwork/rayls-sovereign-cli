@@ -28,19 +28,19 @@ cat > manifest.json <<EOF
   "releaseNotes": "${RELEASE_NOTES}",
   "platforms": {
     "darwin-amd64": {
-      "url": "https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-darwin-amd64",
+      "url": "https://cli.rayls.com/rayls-darwin-amd64",
       "sha256": "${DARWIN_AMD64_SHA}"
     },
     "darwin-arm64": {
-      "url": "https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-darwin-arm64",
+      "url": "https://cli.rayls.com/rayls-darwin-arm64",
       "sha256": "${DARWIN_ARM64_SHA}"
     },
     "linux-amd64": {
-      "url": "https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-linux-amd64",
+      "url": "https://cli.rayls.com/rayls-linux-amd64",
       "sha256": "${LINUX_AMD64_SHA}"
     },
     "linux-arm64": {
-      "url": "https://rayls-cli.s3.eu-west-2.amazonaws.com/rayls-linux-arm64",
+      "url": "https://cli.rayls.com/rayls-linux-arm64",
       "sha256": "${LINUX_ARM64_SHA}"
     }
   }
@@ -55,4 +55,4 @@ echo ""
 echo "Next steps:"
 echo "  1. Review manifest.json"
 echo "  2. Upload binaries: make upload-s3"
-echo "  3. Or manually: aws s3 cp dist/* s3://rayls-cli/ --recursive --acl public-read"
+echo "  3. Or manually: aws s3 cp dist/* s3://rayls-cli/ --recursive"
