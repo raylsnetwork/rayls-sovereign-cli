@@ -20,7 +20,7 @@ The **Rayls CLI** is a developer tool for provisioning and managing the [Rayls](
 
 Currently, this tool focuses on deploying a **local demo environment** on a single host, making it ideal for sales demonstrations, proof-of-concept exploration, and local development. It automates the generation of Docker Compose configurations and manages the lifecycle of the Rayls components.
 
-> **v2.0.0** — the privacy node is now the **Axyl** (`rayls-network`) node, running gaslessly in its local dev-mode profile, and replacing the previous Geth-based ledger. The **default** `rayls init` now spins up a single local privacy node bridged to a public chain (the primary use case); the full multi-participant demo stack moved behind `--full`.
+> **What changed recently** — the privacy node is now the **Axyl** (`rayls-network`) node, running gaslessly in its local dev-mode profile, and replacing the previous Geth-based ledger. The **default** `rayls init` now spins up a single local privacy node bridged to a public chain (the primary use case); the full multi-participant demo stack moved behind `--full`.
 
 For a deeper understanding of the Rayls architecture and ecosystem, please visit the [Official Rayls Documentation](https://docs.rayls.com/docs/a-warm-introduction-to-rayls).
 
@@ -32,7 +32,7 @@ For a deeper understanding of the Rayls architecture and ecosystem, please visit
 *   **Automated Setup:** Generates a dynamic `docker-compose.yaml` tailored to your specifications.
 *   **Sequential Image Pulling:** Automatically pulls container images one-by-one — in every mode, `--local` included — to stay under ECR Public's per-IP pull rate limit, cooling off and retrying if a registry throttles anyway.
 *   **Lifecycle Management:** Specialized commands to start, stop, and tear down the stack.
-*   **Monitoring & Observability:** Optional OpenTelemetry stack with eBPF auto-instrumentation, Grafana, Loki, Prometheus, and Tempo.
+*   **Monitoring & Observability:** Optional OpenTelemetry stack (a single `grafana/otel-lgtm` container: OTel collector, Grafana, Loki, Prometheus, Tempo, and Pyroscope).
 *   **Per-Node Block Explorers:** Blockscout deployment per privacy node (default-on).
 *   **Version Management:** Built-in version checking and update notifications.
 *   **Environment Verification:** Tools to verify the integrity of the setup, including an end-to-end public-chain bridge smoke test.
@@ -50,10 +50,10 @@ Before using the Rayls CLI, ensure you have the following installed on your syst
 Stacks that bridge to the **Rayls testnet** (what a bare `rayls init` does) deploy the public-chain contracts and seed each participant's relayer wallets **from your own deployer key**. Funding happens outside the CLI:
 
 1. Create a fresh key with any wallet tool (e.g. `cast wallet new`).
-2. Request testnet RAYLS for its address through the [Rayls community](https://www.rayls.com/community). Budget roughly **5 RAYLS per participant** (each participant's public-relayer wallets are seeded with 2.5 RAYLS, plus deploy gas).
+2. Request testnet USDr (the Rayls public chain's native gas token) for its address through the [Rayls community](https://www.rayls.com/community). Budget roughly **5 USDr per participant** (each participant's public-relayer wallets are seeded with 2.5 USDr in total, plus deploy gas).
 3. Run `./rayls init`; it prompts for the key (input hidden, `0x` prefix optional) and stores it in the stack directory's `.env` (created with `0600` permissions), where every later `rayls` / `docker compose` run picks it up automatically. For CI or scripting, set `PUBLIC_CHAIN_PRIVATE_KEY=<hex>` in the environment instead because it overrides `.env` and is never written to disk.
 
-`rayls init` **preflights the balance**: it derives your key's address, queries the chain, and refuses immediately (naming the account, balance, and shortfall) if it can't cover a fresh deploy (~2 RAYLS gas + 2.5 per participant). This replaces the opaque mid-deploy failures an underfunded key used to cause. Note that every fresh init (after `rayls down -v`) spends that amount again, and each restart of the contracts container re-seeds the relayer wallets with 2.5, so prefer `rayls stop`/`start` over wipe-and-redeploy while iterating.
+`rayls init` **preflights the balance**: it derives your key's address, queries the chain, and refuses immediately (naming the account, balance, and shortfall) if it can't cover a fresh deploy (~2 USDr gas + 2.5 USDr per participant). This replaces the opaque mid-deploy failures an underfunded key used to cause. Note that every fresh init (after `rayls down -v`) spends that amount again, and each restart of the contracts container re-seeds the relayer wallets with 2.5, so prefer `rayls stop`/`start` over wipe-and-redeploy while iterating.
 
 Use a **testnet-only key** and never reuse a mainnet key: like any compose environment value it is visible in `docker inspect` on your machine. Fully local stacks (`rayls init --local`, `--privacy-node-only`, or `--full` without a public chain) need no funding at all since their chains run in-stack and are genesis-funded.
 
@@ -131,7 +131,7 @@ If a `docker-compose.yaml` already exists, you'll be prompted to overwrite or us
 *   `--members <int>`: Number of privacy node participants. With `--full`: 2–6 (default **2**). For the hub-less default topology: 1–6 (default **1**) — the nodes intercommunicate via the public chain, so any count is meaningful. Ignored on hub-carrying lean stacks (`--with-hub` runs a single participant; use `--full` for the multi-participant hub).
 *   `--public-chain <preset>`: Public chain preset to bridge to — `local` (an Axyl public chain running **inside the stack**: service `public-chain`, RPC `localhost:8845`, chain id `7331`, deployer genesis-funded, no external connectivity) or `rayls-testnet` (the external testnet). Applied by default for the default (lean) stack — in the hub-less default the public chain is the privacy nodes' only interconnection path: **`local` with `--local`, `rayls-testnet` otherwise**. `--full --local` also defaults to `local` (the 3.0.1 source deploy requires a public chain); only `--full` with pulled images runs without one. Adds per-participant `pubrelayer` services.
 *   `--privacy-node-only`: Run just a single Axyl privacy node, with no bridge or surrounding services. Ignores all other flags.
-*   `--monitoring`: Enable the observability stack (Grafana, Loki, Prometheus, Tempo) with eBPF auto-instrumentation. Default: off.
+*   `--monitoring`: Enable the observability stack (Grafana, Loki, Prometheus, Tempo, Pyroscope, plus an OTLP collector on `4317`/`4318`). Default: off.
 *   `--blockscout <list>`: Comma-separated participant letters that should get a Blockscout explorer (e.g. `a,b`). Defaults to **every participant**; use this to narrow the set.
 *   `--no-blockscout`: Disable the per-node Blockscout explorers entirely (overrides `--blockscout`).
 *   `--local`: Dev mode. Build the Rayls app components (kos/CTS, pubrelayer, private relayer, contracts — plus governance, proofs-api and audit-explorer in hub topologies) from source (short names, `pull_policy=build`/`never`) instead of pulling them from ECR. Also defaults the topology to **hub-less** and `--public-chain` to `local`, so a `--local` init runs **everything on your machine with no hub** — pair with `--public-chain rayls-testnet` to keep bridging to the testnet instead. The infra images (NATS, the Private Network Hub, Postgres, nginx, Blockscout) still come from their registries and are pre-pulled one at a time, same as the published stack.
@@ -173,7 +173,7 @@ PUBLIC_CHAIN_PRIVATE_KEY=<hex> ./rayls init --public-chain rayls-testnet   # 0x 
 
 Once the stack is healthy, bridge a token end-to-end (see [Verifying the bridge](#verifying-the-bridge)).
 
-> This mode uses the dedicated `rayls-contracts:lean-no-pnh` contracts image (built from the sibling `rayls-privacy-contracts` repo, branch `cli-lean-no-pnh`) and the `rayls-privacy-axyl` node image. Both are published to ECR, so the default `init` works out of the box.
+> This mode uses the `rayls-contracts:latest` contracts image (the 3.0.1 `HUB_ENABLED`-aware deploy built from `rayls-sovereign-contracts` `main`; the older `:lean-no-pnh` tag points at the same digest and is kept only for backward compatibility) and the `rayls-privacy-axyl` node image. Both are published to ECR, so the default `init` works out of the box.
 
 #### 2. Full demo stack (`--full`)
 
@@ -216,7 +216,7 @@ Useful when external tooling only needs an EVM RPC endpoint. All other flags are
 
 #### 5. With monitoring
 
-Adds Grafana (`:3300`), Loki, Prometheus, Tempo, and eBPF auto-instrumentation. Combines with the default or `--full` modes.
+Adds a single `grafana/otel-lgtm` container: Grafana (`:3300`), Loki (`:3100`), Prometheus (`:3090`), Tempo (`:3200`), Pyroscope (`:3040`) and an OTLP collector (`:4317` gRPC / `:4318` HTTP). Services are not auto-instrumented; point them at the collector to ship telemetry. Combines with the default or `--full` modes.
 
 ```bash
 ./rayls init --monitoring
@@ -279,14 +279,14 @@ docker build -f etc/docker-network/Dockerfile \
     Pauses running containers without removing them.
     ```bash
     ./rayls stop               # Stop all services
-    ./rayls stop pl-b          # Stop specific services
+    ./rayls stop privacy-node-b   # Stop specific services
     ```
 *   **Tear down the environment:**
     Stops and removes containers and networks. By default, volumes are preserved (data is kept).
     ```bash
     ./rayls down               # Remove containers/networks, keep volumes (data preserved)
     ./rayls down -v            # Remove containers/networks AND volumes (destructive)
-    ./rayls down --remove-orphans  # Also remove orphaned containers
+    ./rayls down -y            # Skip the confirmation prompt (orphaned containers are always removed)
     ```
 
 ### Monitoring & Inspection
@@ -441,7 +441,7 @@ When running with `--full`, the CLI provisions the complete Rayls stack:
 **Infrastructure Layer**
 *   **Postgres** - Relational database for relayer/KOS/governance data
 *   **Commit Chain** - Besu-based blockchain for cross-ledger coordination
-*   **OpenTelemetry Stack** - Optional (when `--monitoring` is enabled): eBPF auto-instrumentation, Grafana, Loki, Tempo, Prometheus
+*   **OpenTelemetry Stack** - Optional (when `--monitoring` is enabled): one `grafana/otel-lgtm` container bundling the OTel collector, Grafana, Loki, Tempo, Prometheus, and Pyroscope
 
 **Contract Deployment Layer**
 *   **Proofs API** - Zero-knowledge proof generation service
@@ -472,7 +472,7 @@ This orchestration ensures that all required dependencies are available before d
 
 ## Troubleshooting
 
-*   **`invalid empty ssh agent socket` during a `--local` build:** the git build contexts are private, so BuildKit needs your ssh-agent — make sure `SSH_AUTH_SOCK` is set and your GitHub key is loaded (`ssh-add -l`).
+*   **`invalid empty ssh agent socket` during a `--local` build:** the default git build contexts are public `https://` URLs and need no agent; this appears when a `*_REPO` override uses a `git@`/`ssh://` URL (e.g. a private fork), which makes BuildKit request ssh forwarding — make sure `SSH_AUTH_SOCK` is set and your GitHub key is loaded (`ssh-add -l`).
 *   **BuildKit can't resolve a custom SSH host alias:** git contexts are cloned by the Docker daemon, which doesn't read your `~/.ssh/config`. Use the plain `github.com` host in `*_REPO` URLs and select the right key via your agent, or fall back to a local checkout with `rayls dev`.
 *   **`docker-compose.override.yaml exists but was not generated by rayls dev`:** you have a hand-written override; move it aside (its job is likely covered by `rayls dev` now).
 

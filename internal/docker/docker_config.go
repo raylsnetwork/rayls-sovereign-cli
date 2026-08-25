@@ -115,7 +115,8 @@ const (
 	localPublicChainChainID = 7331
 )
 
-// FundingURL is where users request testnet RAYLS for their own deployer key
+// FundingURL is where users request testnet USDr (the public chain's gas token)
+// for their own deployer key
 // (funding happens outside the CLI).
 const FundingURL = "https://www.rayls.com/community"
 

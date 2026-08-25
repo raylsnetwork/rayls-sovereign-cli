@@ -135,7 +135,7 @@ func ensurePublicChainKey(pc *docker.PublicChain) (string, error) {
 A deployer key funded on %s is required: the deploy pays public-chain gas and
 seeds each participant's public-relayer wallets from it. There is no shared
 default key; fund your own key first via %s
-(roughly 5 RAYLS per participant), then enter it below. It will be stored in
+(roughly 5 USDr per participant), then enter it below. It will be stored in
 this directory's .env (permissions 0600) and reused by every later run.
 
 `, pc.Name, pc.Faucet)
@@ -189,7 +189,7 @@ func warnIfEnvFileCommittable() {
 func missingPublicChainKeyError(chainName string) error {
 	return fmt.Errorf(`no funded deployer key for %s.
 
-Deploying to %s needs your own private key, funded with testnet RAYLS; there
+Deploying to %s needs your own private key, funded with testnet USDr; there
 is no shared default key. Get funds at %s, then provide
 the key one of these ways:
 
