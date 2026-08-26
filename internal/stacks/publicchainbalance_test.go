@@ -42,16 +42,16 @@ func TestRequiredInitFundsWei(t *testing.T) {
 		return new(big.Int).Mul(big.NewInt(tenths), new(big.Int).Exp(big.NewInt(10), big.NewInt(17), nil))
 	}
 	if got := requiredInitFundsWei(1); got.Cmp(rayls(45)) != 0 { // 2 + 2.5
-		t.Errorf("1 participant: got %s, want 4.5 RAYLS", weiToRayls(got))
+		t.Errorf("1 participant: got %s, want 4.5 USDr", weiToUsdr(got))
 	}
 	if got := requiredInitFundsWei(3); got.Cmp(rayls(95)) != 0 { // 2 + 7.5
-		t.Errorf("3 participants: got %s, want 9.5 RAYLS", weiToRayls(got))
+		t.Errorf("3 participants: got %s, want 9.5 USDr", weiToUsdr(got))
 	}
 }
 
-func TestWeiToRayls(t *testing.T) {
+func TestWeiToUsdr(t *testing.T) {
 	wei, _ := new(big.Int).SetString("1566278887397589872", 10)
-	if got := weiToRayls(wei); got != "1.5663" {
+	if got := weiToUsdr(wei); got != "1.5663" {
 		t.Errorf("got %s, want 1.5663", got)
 	}
 }
@@ -73,7 +73,7 @@ func TestCheckDeployerBalance(t *testing.T) {
 	key := strings.Repeat("ab", 32)
 
 	t.Run("sufficient balance passes", func(t *testing.T) {
-		srv := stubRPC(t, "0x4563918244f40000") // 5 RAYLS > 4.5 required
+		srv := stubRPC(t, "0x4563918244f40000") // 5 USDr > 4.5 required
 		defer srv.Close()
 		pc := &docker.PublicChain{Name: "rayls-testnet", RPC: srv.URL, Faucet: docker.FundingURL}
 		if err := checkDeployerBalance(pc, key, 1); err != nil {
@@ -82,7 +82,7 @@ func TestCheckDeployerBalance(t *testing.T) {
 	})
 
 	t.Run("insufficient balance refuses with shortfall and funding URL", func(t *testing.T) {
-		srv := stubRPC(t, "0x15bcacb1eb98fdf0") // ~1.5663 RAYLS < 4.5
+		srv := stubRPC(t, "0x15bcacb1eb98fdf0") // ~1.5663 USDr < 4.5
 		defer srv.Close()
 		pc := &docker.PublicChain{Name: "rayls-testnet", RPC: srv.URL, Faucet: docker.FundingURL}
 		err := checkDeployerBalance(pc, key, 1)

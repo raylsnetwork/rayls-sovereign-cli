@@ -19,17 +19,17 @@ import (
 // Preflight for testnet-bridged inits: an underfunded deployer key fails
 // MINUTES into the deploy with errors that name neither account nor amount.
 // Cost model (observed on rayls-testnet at the deploy's fixed 100 gwei):
-// ~2 deploy gas (~1.67 upfront) + 0.5 x 5 relayer wallets per participant,
+// ~2 USDr deploy gas (~1.67 upfront) + 0.5 x 5 relayer wallets per participant,
 // re-spent on every fresh deploy; auth re-seeds on each contracts restart.
 const (
-	deployGasRaylsX10          = 20 // ~2.0 deploy gas, in tenths to stay integer
-	perParticipantSeedRaylsX10 = 25 // 2.5 relayer seeding per participant, in tenths
+	deployGasUsdrX10          = 20 // ~2.0 deploy gas, in tenths to stay integer
+	perParticipantSeedUsdrX10 = 25 // 2.5 relayer seeding per participant, in tenths
 )
 
 func requiredInitFundsWei(participants int) *big.Int {
-	tenthRayls := new(big.Int).Exp(big.NewInt(10), big.NewInt(17), nil) // 0.1 in wei
-	tenths := int64(deployGasRaylsX10) + int64(perParticipantSeedRaylsX10)*int64(participants)
-	return new(big.Int).Mul(big.NewInt(tenths), tenthRayls)
+	tenthUsdr := new(big.Int).Exp(big.NewInt(10), big.NewInt(17), nil) // 0.1 in wei
+	tenths := int64(deployGasUsdrX10) + int64(perParticipantSeedUsdrX10)*int64(participants)
+	return new(big.Int).Mul(big.NewInt(tenths), tenthUsdr)
 }
 
 // deployerAddress derives the 0x EVM address from a bare or 0x-prefixed hex
@@ -83,8 +83,8 @@ func fetchBalanceWei(rpcURL, address string) (*big.Int, error) {
 	return bal, nil
 }
 
-// weiToRayls renders wei as a decimal string with 4 fractional digits.
-func weiToRayls(wei *big.Int) string {
+// weiToUsdr renders wei as a decimal USDr string with 4 fractional digits.
+func weiToUsdr(wei *big.Int) string {
 	r := new(big.Rat).SetFrac(wei, new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
 	return r.FloatString(4)
 }
@@ -106,19 +106,19 @@ func checkDeployerBalance(pc *docker.PublicChain, privKeyHex string, participant
 	}
 	required := requiredInitFundsWei(participants)
 	if balance.Cmp(required) >= 0 {
-		fmt.Printf("Deployer %s balance on %s: %s (needs ~%s for a fresh deploy) ✓\n",
-			address, pc.Name, weiToRayls(balance), weiToRayls(required))
+		fmt.Printf("Deployer %s balance on %s: %s USDr (needs ~%s USDr for a fresh deploy) ✓\n",
+			address, pc.Name, weiToUsdr(balance), weiToUsdr(required))
 		return nil
 	}
 	shortfall := new(big.Int).Sub(required, balance)
 	return fmt.Errorf(`insufficient funds on the deployer account for %s.
 
   account:   %s
-  balance:   %s
-  required:  ~%s  (deploy gas ~2 + 2.5 x %d participant(s) relayer seeding)
-  shortfall: %s
+  balance:   %s USDr
+  required:  ~%s USDr  (deploy gas ~2 + 2.5 x %d participant(s) relayer seeding)
+  shortfall: %s USDr
 
 Top up via %s and re-run.`,
-		pc.Name, address, weiToRayls(balance), weiToRayls(required), participants,
-		weiToRayls(shortfall), pc.Faucet)
+		pc.Name, address, weiToUsdr(balance), weiToUsdr(required), participants,
+		weiToUsdr(shortfall), pc.Faucet)
 }
